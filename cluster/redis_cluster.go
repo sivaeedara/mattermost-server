@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"log"
-	"time"
 
 	"github.com/mattermost/mattermost-server/mlog"
 
@@ -24,29 +23,14 @@ type RedisCluster struct {
 	redisInstanceId       string
 	redisTopic            string
 	settings              *model.RedisSettings
-	connectChan           chan int
-}
-
-func (me *RedisCluster) connectAndFetch() {
-	go func() {
-		defer close(me.connectChan)
-		for {
-			_, ok := <-me.connectChan
-			if ok {
-				mlog.Info("****** redis_cluster receive connect signal. Start connecting *******")
-				me.subscribe()
-			} else {
-				mlog.Info("Exit connect. Clear your stuff now")
-			}
-		}
-	}()
+	subscribeChan         chan int
 }
 
 func init() {
 	log.Printf("***** Loading redis clustering *******")
 	app.RegisterClusterInterface(func(a *app.App) einterfaces.ClusterInterface {
 		rdCluster := &RedisCluster{}
-		rdCluster.connectChan = make(chan int, 1)
+		rdCluster.subscribeChan = make(chan int, 1)
 		rdCluster.app = a
 		rdCluster.settings = &a.GetConfig().RedisSettings
 		rdCluster.clusterMessageHandler = make(map[string]einterfaces.ClusterMessageHandler)
@@ -64,7 +48,7 @@ func init() {
 			mlog.Info(fmt.Sprintf("******* redis_cluster cluster topic is %v ******\n", clusterName))
 			rdCluster.redisTopic = clusterName
 		}
-		rdCluster.connectAndFetch()
+		rdCluster.startConnectListener()
 		return rdCluster
 	})
 }
@@ -75,7 +59,22 @@ func (me *RedisCluster) StartInterNodeCommunication() {
 		return
 	}
 	//start connect
-	me.connectChan <- 1
+	me.subscribeChan <- 1
+}
+
+func (me *RedisCluster) startConnectListener() {
+	go func() {
+		defer close(me.subscribeChan)
+		for {
+			_, ok := <-me.subscribeChan
+			if ok {
+				mlog.Info("****** redis_cluster receive connect signal. Start connecting *******")
+				me.subscribe()
+			} else {
+				mlog.Info("Exit connect. Clear your stuff now")
+			}
+		}
+	}()
 }
 
 func (me *RedisCluster) processRedisMessage(msg *redis.Message) {
@@ -102,30 +101,15 @@ func (me *RedisCluster) subscribe() {
 	mlog.Info("***** starting redis_clustering. Subscribing ... *****")
 	me.pubsub = me.client.Subscribe(me.redisTopic)
 	go func() {
-		//breakLoop:
-		errorCount := 0
 		for {
-			msg, err := me.pubsub.ReceiveMessage()
-			if err != nil {
-				mlog.Error(err.Error())
-				time.Sleep(5 * time.Second)
-				errorCount++
-				if errorCount > 5 {
-					mlog.Warn(fmt.Sprintf(
-						"******** redis_cluster needs reconnect. Number of errors exists %v times \n", errorCount))
-					me.connectChan <- 1
-					break
-				}
-				// 	me.connectChan <- 1
-			} else {
-				me.processRedisMessage(msg)
-			}
+			msg := <-me.pubsub.Channel()
+			me.processRedisMessage(msg)
 		}
-		mlog.Info("Exiting subscribe ...")
 	}()
 }
 
 func (me *RedisCluster) StopInterNodeCommunication() {
+	defer close(me.subscribeChan)
 	if me.pubsub != nil {
 		error := me.pubsub.Unsubscribe(me.redisTopic)
 		if error != nil {
