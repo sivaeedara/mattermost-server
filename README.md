@@ -1,4 +1,4 @@
-# [![Clustering Mattermost using Redis] (https://user-images.githubusercontent.com/33878967/33095422-7c8aa7a4-ceb8-11e7-810a-4b261fdff6d6.png)](https://mattermost.org)
+# Clustering Mattermost using Redis
 
 This project is to make Mattermost running in cluster mode using Redis Pubsub. 
 
@@ -6,15 +6,18 @@ How to make it run:
 
 - In config.json, enable clustering mode ClusterSettings > Enable
 - Adding redis settings. 
-    "RedisSettings": {
+  ```json 
+   "RedisSettings": {
         "Enable": true,
         "Address": "localhost:6379",
         "PoolSize": 100, 
         "Index": 2
-    }
+    } 
+    ```
 - Restart mattermost. 
 
-## About mattermost
+## [![Clustering Mattermost using Redis](https://user-images.githubusercontent.com/33878967/33095422-7c8aa7a4-ceb8-11e7-810a-4b261fdff6d6.png)](https://mattermost.org)
+
 Mattermost is an open source, private cloud, Slack-alternative from [https://mattermost.org](https://mattermost.org).
 
 It's written in Golang and React and runs as a single Linux binary with MySQL or PostgreSQL. Every month on the 16th [a new compiled version is released under an MIT license](https://www.mattermost.org/download/).
