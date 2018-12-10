@@ -1354,6 +1354,21 @@ type LdapSettings struct {
 	LoginButtonTextColor   *string
 }
 
+func (s *RedisSettings) SetDefaults() {
+	if s.Enable == nil {
+		s.Enable = NewBool(false)
+	}
+	if s.Address == nil {
+		s.Address = NewString("localhost:6379")
+	}
+	if s.PoolSize == nil {
+		s.PoolSize = NewInt(100)
+	}
+	if s.Index == nil {
+		s.Index = NewInt(0)
+	}
+}
+
 func (s *LdapSettings) SetDefaults() {
 	if s.Enable == nil {
 		s.Enable = NewBool(false)
@@ -1919,6 +1934,14 @@ func (s *TimezoneSettings) SetDefaults() {
 	}
 }
 
+type RedisSettings struct {
+	Enable   *bool
+	Address  *string
+	Password *string
+	Index    *int
+	PoolSize *int
+}
+
 type ConfigFunc func() *Config
 
 type Config struct {
@@ -1955,6 +1978,7 @@ type Config struct {
 	PluginSettings        PluginSettings
 	DisplaySettings       DisplaySettings
 	TimezoneSettings      TimezoneSettings
+	RedisSettings         RedisSettings
 }
 
 func (o *Config) Clone() *Config {
@@ -2027,6 +2051,7 @@ func (o *Config) SetDefaults() {
 	o.TimezoneSettings.SetDefaults()
 	o.DisplaySettings.SetDefaults()
 	o.ExtensionSettings.SetDefaults()
+	o.RedisSettings.SetDefaults()
 }
 
 func (o *Config) IsValid() *AppError {
@@ -2098,6 +2123,21 @@ func (o *Config) IsValid() *AppError {
 		return err
 	}
 
+	if err := o.RedisSettings.isValid(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (rs *RedisSettings) isValid() *AppError {
+	if *rs.Enable {
+		if *rs.Address == "" {
+			return NewAppError("Config.IsValid", "model.config.is_valid.redis_empty_address.app_error", nil, "", http.StatusBadRequest)
+		}
+		if *rs.Index > 10 || *rs.Index < 0 {
+			return NewAppError("Config.IsValid", "model.config.is_valid.redis_index.app_error", nil, "", http.StatusBadRequest)
+		}
+	}
 	return nil
 }
 
