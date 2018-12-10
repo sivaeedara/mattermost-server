@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/mattermost/mattermost-server/mlog"
 
@@ -23,12 +24,29 @@ type RedisCluster struct {
 	redisInstanceId       string
 	redisTopic            string
 	settings              *model.RedisSettings
+	connectChan           chan int
+}
+
+func (me *RedisCluster) connectAndFetch() {
+	go func() {
+		defer close(me.connectChan)
+		for {
+			_, ok := <-me.connectChan
+			if ok {
+				mlog.Info("****** redis_cluster receive connect signal. Start connecting *******")
+				me.subscribe()
+			} else {
+				mlog.Info("Exit connect. Clear your stuff now")
+			}
+		}
+	}()
 }
 
 func init() {
 	log.Printf("***** Loading redis clustering *******")
 	app.RegisterClusterInterface(func(a *app.App) einterfaces.ClusterInterface {
 		rdCluster := &RedisCluster{}
+		rdCluster.connectChan = make(chan int, 1)
 		rdCluster.app = a
 		rdCluster.settings = &a.GetConfig().RedisSettings
 		rdCluster.clusterMessageHandler = make(map[string]einterfaces.ClusterMessageHandler)
@@ -43,8 +61,10 @@ func init() {
 			if clusterName == "" {
 				clusterName = "vincere-chat"
 			}
+			mlog.Info(fmt.Sprintf("******* redis_cluster cluster topic is %v ******\n", clusterName))
 			rdCluster.redisTopic = clusterName
 		}
+		rdCluster.connectAndFetch()
 		return rdCluster
 	})
 }
@@ -54,28 +74,55 @@ func (me *RedisCluster) StartInterNodeCommunication() {
 		mlog.Warn("redis cluster needs redis enabled as well")
 		return
 	}
+	//start connect
+	me.connectChan <- 1
+}
+
+func (me *RedisCluster) processRedisMessage(msg *redis.Message) {
+	if msg != nil {
+		clusterMsg := model.ClusterMessageFromJson(bytes.NewReader([]byte(msg.Payload)))
+		if me.redisInstanceId != clusterMsg.Props["instance-id"] {
+			mlog.Debug(fmt.Sprintf("Received redis_event from cluster %v\n", clusterMsg))
+			me.app.Go(func() {
+				crm := me.clusterMessageHandler[clusterMsg.Event]
+				if crm != nil {
+					crm(clusterMsg)
+				}
+			})
+		} else {
+			mlog.Debug(fmt.Sprintf("Instance %v received its published message. Skip it \n",
+				me.redisInstanceId))
+		}
+	} else {
+		mlog.Warn("redis_cluster received NULL from channel")
+	}
+}
+
+func (me *RedisCluster) subscribe() {
 	mlog.Info("***** starting redis_clustering. Subscribing ... *****")
 	me.pubsub = me.client.Subscribe(me.redisTopic)
-	for true {
-		msg, error := me.pubsub.ReceiveMessage()
-		if error == nil {
-			clusterMsg := model.ClusterMessageFromJson(bytes.NewReader([]byte(msg.Payload)))
-			if me.redisInstanceId != clusterMsg.Props["instance-id"] {
-				mlog.Debug(fmt.Sprintf("Received redis_event from cluster %v\n", clusterMsg))
-				me.app.Go(func() {
-					crm := me.clusterMessageHandler[clusterMsg.Event]
-					if crm != nil {
-						crm(clusterMsg)
-					}
-				})
+	go func() {
+		//breakLoop:
+		errorCount := 0
+		for {
+			msg, err := me.pubsub.ReceiveMessage()
+			if err != nil {
+				mlog.Error(err.Error())
+				time.Sleep(5 * time.Second)
+				errorCount++
+				if errorCount > 5 {
+					mlog.Warn(fmt.Sprintf(
+						"******** redis_cluster needs reconnect. Number of errors exists %v times \n", errorCount))
+					me.connectChan <- 1
+					break
+				}
+				// 	me.connectChan <- 1
 			} else {
-				mlog.Debug(fmt.Sprintf("Instance %v received its published message. Skip it \n",
-					me.redisInstanceId))
+				me.processRedisMessage(msg)
 			}
-		} else {
-			mlog.Error(error.Error())
 		}
-	}
+		mlog.Info("Exiting subscribe ...")
+	}()
 }
 
 func (me *RedisCluster) StopInterNodeCommunication() {
@@ -84,6 +131,7 @@ func (me *RedisCluster) StopInterNodeCommunication() {
 		if error != nil {
 			mlog.Error(error.Error())
 		}
+		me.pubsub.Close()
 	}
 }
 
