@@ -1,5 +1,7 @@
 # Clustering Mattermost using Redis
 
+## For those who are using Mattermost Team Edition finding a solution of clustering Mattermost. This project would help you.
+
 This project is to make Mattermost running in cluster mode using Redis Pubsub. 
 
 How to make it run: 
