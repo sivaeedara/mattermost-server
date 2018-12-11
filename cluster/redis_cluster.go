@@ -13,6 +13,8 @@ import (
 	"github.com/mattermost/mattermost-server/model"
 )
 
+var logClusterUnsupport = []string{`we don't support log live monitoring for redis cluster. Please use external log services like logentries or ELK instead`}
+
 //RedisCluster redis cluster implementation
 type RedisCluster struct {
 	app *app.App
@@ -24,15 +26,21 @@ type RedisCluster struct {
 	redisTopic            string
 	settings              *model.RedisSettings
 	subscribeChan         chan int
+	clusterInfo           *model.ClusterInfo
 }
 
 func init() {
 	log.Printf("***** Loading redis clustering *******")
 	app.RegisterClusterInterface(func(a *app.App) einterfaces.ClusterInterface {
+		settings := &a.GetConfig().RedisSettings
+		if !*settings.EnableRedisCluster || !*settings.Enable {
+			mlog.Warn("To use redis cluster, please enable redis and redis cluster")
+			return nil
+		}
 		rdCluster := &RedisCluster{}
 		rdCluster.subscribeChan = make(chan int, 1)
 		rdCluster.app = a
-		rdCluster.settings = &a.GetConfig().RedisSettings
+		rdCluster.settings = settings
 		rdCluster.clusterMessageHandler = make(map[string]einterfaces.ClusterMessageHandler)
 		if *rdCluster.settings.Enable {
 			rdCluster.redisInstanceId = model.NewId()
@@ -47,6 +55,9 @@ func init() {
 			}
 			mlog.Info(fmt.Sprintf("******* redis_cluster cluster topic is %v ******\n", clusterName))
 			rdCluster.redisTopic = clusterName
+		}
+		rdCluster.clusterInfo = &model.ClusterInfo{
+			Id: rdCluster.redisInstanceId,
 		}
 		rdCluster.startConnectListener()
 		return rdCluster
@@ -63,8 +74,8 @@ func (me *RedisCluster) StartInterNodeCommunication() {
 }
 
 func (me *RedisCluster) startConnectListener() {
-	go func() {
-		defer close(me.subscribeChan)
+	me.app.Go(func() {
+		//defer close(me.subscribeChan)
 		for {
 			_, ok := <-me.subscribeChan
 			if ok {
@@ -72,9 +83,11 @@ func (me *RedisCluster) startConnectListener() {
 				me.subscribe()
 			} else {
 				mlog.Info("Exit connect. Clear your stuff now")
+				break
 			}
 		}
-	}()
+		mlog.Info("Stopped Redis Cluster Listerner")
+	})
 }
 
 func (me *RedisCluster) processRedisMessage(msg *redis.Message) {
@@ -100,12 +113,17 @@ func (me *RedisCluster) processRedisMessage(msg *redis.Message) {
 func (me *RedisCluster) subscribe() {
 	mlog.Info("***** starting redis_clustering. Subscribing ... *****")
 	me.pubsub = me.client.Subscribe(me.redisTopic)
-	go func() {
+	me.app.Go(func() {
 		for {
-			msg := <-me.pubsub.Channel()
-			me.processRedisMessage(msg)
+			msg, ok := <-me.pubsub.Channel()
+			if ok {
+				me.processRedisMessage(msg)
+			} else {
+				mlog.Info("redis_clustering exiting subscribe(). PubSub Channel was already closed")
+				break
+			}
 		}
-	}()
+	})
 }
 
 func (me *RedisCluster) StopInterNodeCommunication() {
@@ -129,7 +147,7 @@ func (me *RedisCluster) IsLeader() bool {
 	return false
 }
 func (me *RedisCluster) GetMyClusterInfo() *model.ClusterInfo {
-	return nil
+	return me.clusterInfo
 }
 func (me *RedisCluster) GetClusterInfos() []*model.ClusterInfo {
 	return nil
@@ -154,14 +172,16 @@ func (me *RedisCluster) NotifyMsg(buf []byte) {
 }
 
 func (me *RedisCluster) GetClusterStats() ([]*model.ClusterStats, *model.AppError) {
-	return nil, nil
+	return []*model.ClusterStats{}, nil
 }
 func (me *RedisCluster) GetLogs(page, perPage int) ([]string, *model.AppError) {
-	return nil, nil
+	return logClusterUnsupport, nil
 }
+
 func (me *RedisCluster) GetPluginStatuses() (model.PluginStatuses, *model.AppError) {
 	return nil, nil
 }
 func (me *RedisCluster) ConfigChanged(previousConfig *model.Config, newConfig *model.Config, sendToOtherServer bool) *model.AppError {
+	mlog.Info("Config changed")
 	return nil
 }

@@ -1367,6 +1367,9 @@ func (s *RedisSettings) SetDefaults() {
 	if s.Index == nil {
 		s.Index = NewInt(0)
 	}
+	if s.EnableRedisCluster == nil {
+		s.EnableRedisCluster = NewBool(false)
+	}
 }
 
 func (s *LdapSettings) SetDefaults() {
@@ -1935,11 +1938,12 @@ func (s *TimezoneSettings) SetDefaults() {
 }
 
 type RedisSettings struct {
-	Enable   *bool
-	Address  *string
-	Password *string
-	Index    *int
-	PoolSize *int
+	Enable             *bool
+	Address            *string
+	Password           *string
+	Index              *int
+	PoolSize           *int
+	EnableRedisCluster *bool
 }
 
 type ConfigFunc func() *Config
