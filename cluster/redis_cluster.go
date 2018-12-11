@@ -45,15 +45,19 @@ func init() {
 		if *rdCluster.settings.Enable {
 			rdCluster.redisInstanceId = model.NewId()
 
-			option := &redis.Options{Addr: *rdCluster.settings.Address, PoolSize: *rdCluster.settings.PoolSize,
-				DB: *rdCluster.settings.Index, MaxRetries: 3}
+			option := &redis.Options{Addr: *rdCluster.settings.Address,
+				PoolSize: *rdCluster.settings.PoolSize,
+				DB:       *rdCluster.settings.Index, MaxRetries: 3}
+			if settings.Password != nil && *settings.Password != "" {
+				option.Password = *settings.Password
+			}
 			rdCluster.client = redis.NewClient(option)
 			clusterName := *a.GetConfig().ClusterSettings.ClusterName
 
 			if clusterName == "" {
 				clusterName = "vincere-chat"
 			}
-			mlog.Info(fmt.Sprintf("******* redis_cluster cluster topic is %v ******\n", clusterName))
+			mlog.Info(fmt.Sprintf("******* redis_cluster cluster topic is %v ******", clusterName))
 			rdCluster.redisTopic = clusterName
 		}
 		rdCluster.clusterInfo = &model.ClusterInfo{
@@ -94,7 +98,7 @@ func (me *RedisCluster) processRedisMessage(msg *redis.Message) {
 	if msg != nil {
 		clusterMsg := model.ClusterMessageFromJson(bytes.NewReader([]byte(msg.Payload)))
 		if me.redisInstanceId != clusterMsg.Props["instance-id"] {
-			mlog.Debug(fmt.Sprintf("Received redis_event from cluster %v\n", clusterMsg))
+			mlog.Debug(fmt.Sprintf("Received redis_event from cluster %v", clusterMsg))
 			me.app.Go(func() {
 				crm := me.clusterMessageHandler[clusterMsg.Event]
 				if crm != nil {
@@ -102,7 +106,7 @@ func (me *RedisCluster) processRedisMessage(msg *redis.Message) {
 				}
 			})
 		} else {
-			mlog.Debug(fmt.Sprintf("Instance %v received its published message. Skip it \n",
+			mlog.Debug(fmt.Sprintf("Instance %v received its published message. Skip it",
 				me.redisInstanceId))
 		}
 	} else {

@@ -403,6 +403,12 @@ run-server: start-docker ## Starts the server.
 	mkdir -p $(BUILD_WEBAPP_DIR)/dist/files
 	$(GO) run $(GOFLAGS) $(GO_LINKER_FLAGS) $(PLATFORM_FILES) --disableconfigwatch &
 
+run-server-no-docker:  ## Starts the server without using docker
+	@echo Running mattermost for development
+
+	mkdir -p $(BUILD_WEBAPP_DIR)/dist/files
+	$(GO) run $(GOFLAGS) $(GO_LINKER_FLAGS) $(PLATFORM_FILES) --disableconfigwatch &
+
 debug-server: start-docker
 	mkdir -p $(BUILD_WEBAPP_DIR)/dist/files
 	$(DELVE) debug $(PLATFORM_FILES) --build-flags="-ldflags '\

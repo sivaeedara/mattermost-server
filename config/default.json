@@ -353,6 +353,13 @@
         "MaxIdleConnsPerHost": 128,
         "IdleConnTimeoutMilliseconds": 90000
     },
+    "RedisSettings": {
+        "Enable": true,
+        "EnableRedisCluster": true,
+        "Address": "localhost:6379",
+        "PoolSize": 100, 
+        "Index": 0
+    },
     "MetricsSettings": {
         "Enable": false,
         "BlockProfileRate": 0,
