@@ -10,7 +10,7 @@ How to make it run:
   ```json 
    "RedisSettings": {
         "Enable": true,
-        "EnableRedisCluster": true
+        "EnableRedisCluster": true,
         "Address": "localhost:6379",
         "PoolSize": 100, 
         "Index": 2
