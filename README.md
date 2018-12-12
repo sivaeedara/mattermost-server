@@ -1,5 +1,7 @@
 # Clustering Mattermost using Redis
 
+## For those who are using Mattermost Team Edition finding a solution of clustering Mattermost. This project would help you.
+
 This project is to make Mattermost running in cluster mode using Redis Pubsub. 
 
 How to make it run: 
@@ -31,6 +33,7 @@ How to make it run:
 - Go to mattermost-server
 - Run ``go build cmd/mattermost/main.go``, or for linux-built environment, run ``GOOS=linux go build cmd/mattermost/main.go``
 
+### [Download Build](https://drive.google.com/open?id=14Mnveq-JcHDDnEltgcJCMCJA-OscAmPx)
 
 ## [![Clustering Mattermost using Redis](https://user-images.githubusercontent.com/33878967/33095422-7c8aa7a4-ceb8-11e7-810a-4b261fdff6d6.png)](https://mattermost.org)
 
