@@ -66,10 +66,10 @@ func (a *App) AuthenticateUserForLogin(id, loginId, password, mfaToken string, l
 		return nil, err
 	}
 
-	if a.PluginsReady() {
+	if pluginsEnvironment := a.GetPluginsEnvironment(); pluginsEnvironment != nil {
 		var rejectionReason string
-		pluginContext := &plugin.Context{}
-		a.Plugins.RunMultiPluginHook(func(hooks plugin.Hooks) bool {
+		pluginContext := a.PluginContext()
+		pluginsEnvironment.RunMultiPluginHook(func(hooks plugin.Hooks) bool {
 			rejectionReason = hooks.UserWillLogIn(pluginContext, user)
 			return rejectionReason == ""
 		}, plugin.UserWillLogInId)
@@ -78,9 +78,9 @@ func (a *App) AuthenticateUserForLogin(id, loginId, password, mfaToken string, l
 			return nil, model.NewAppError("AuthenticateUserForLogin", "Login rejected by plugin: "+rejectionReason, nil, "", http.StatusBadRequest)
 		}
 
-		a.Go(func() {
-			pluginContext := &plugin.Context{}
-			a.Plugins.RunMultiPluginHook(func(hooks plugin.Hooks) bool {
+		a.Srv.Go(func() {
+			pluginContext := a.PluginContext()
+			pluginsEnvironment.RunMultiPluginHook(func(hooks plugin.Hooks) bool {
 				hooks.UserHasLoggedIn(pluginContext, user)
 				return true
 			}, plugin.UserHasLoggedInId)

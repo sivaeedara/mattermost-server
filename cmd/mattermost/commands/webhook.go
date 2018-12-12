@@ -40,6 +40,23 @@ var WebhookModifyIncomingCmd = &cobra.Command{
 	RunE:    modifyIncomingWebhookCmdF,
 }
 
+var WebhookCreateOutgoingCmd = &cobra.Command{
+	Use:   "create-outgoing",
+	Short: "Create outgoing webhook",
+	Long:  "create outgoing webhook which allows external posting of messages from a specific channel",
+	Example: `  webhook create-outgoing --team myteam --user myusername --display-name mywebhook --trigger-word "build" --trigger-word "test" --url http://localhost:8000/my-webhook-handler
+	webhook create-outgoing --team myteam --channel mychannel --user myusername --display-name mywebhook --description "My cool webhook" --trigger-when start --trigger-word build --trigger-word test --icon http://localhost:8000/my-slash-handler-bot-icon.png --url http://localhost:8000/my-webhook-handler --content-type "application/json"`,
+	RunE: createOutgoingWebhookCmdF,
+}
+
+var WebhookDeleteCmd = &cobra.Command{
+	Use:     "delete",
+	Short:   "Delete webhooks",
+	Long:    "Delete webhook with given id",
+	Example: "  webhook delete [webhookID]",
+	RunE:    deleteWebhookCmdF,
+}
+
 func listWebhookCmdF(command *cobra.Command, args []string) error {
 	app, err := InitDBCommandContextCobra(command)
 	if err != nil {
@@ -99,24 +116,34 @@ func createIncomingWebhookCmdF(command *cobra.Command, args []string) error {
 	}
 	defer app.Shutdown()
 
-	channelArg, _ := command.Flags().GetString("channel")
+	channelArg, errChannel := command.Flags().GetString("channel")
+	if errChannel != nil || channelArg == "" {
+		return errors.New("Channel is required")
+	}
 	channel := getChannelFromChannelArg(app, channelArg)
 	if channel == nil {
 		return errors.New("Unable to find channel '" + channelArg + "'")
 	}
 
-	userArg, _ := command.Flags().GetString("user")
+	userArg, errUser := command.Flags().GetString("user")
+	if errUser != nil || userArg == "" {
+		return errors.New("User is required")
+	}
 	user := getUserFromUserArg(app, userArg)
+	if user == nil {
+		return errors.New("Unable to find user '" + userArg + "'")
+	}
+
 	displayName, _ := command.Flags().GetString("display-name")
 	description, _ := command.Flags().GetString("description")
-	iconUrl, _ := command.Flags().GetString("icon")
+	iconURL, _ := command.Flags().GetString("icon")
 	channelLocked, _ := command.Flags().GetBool("lock-to-channel")
 
 	incomingWebhook := &model.IncomingWebhook{
 		ChannelId:     channel.Id,
 		DisplayName:   displayName,
 		Description:   description,
-		IconURL:       iconUrl,
+		IconURL:       iconURL,
 		ChannelLocked: channelLocked,
 	}
 
@@ -177,9 +204,112 @@ func modifyIncomingWebhookCmdF(command *cobra.Command, args []string) error {
 	return nil
 }
 
+func createOutgoingWebhookCmdF(command *cobra.Command, args []string) error {
+	app, err := InitDBCommandContextCobra(command)
+	if err != nil {
+		return err
+	}
+	defer app.Shutdown()
+
+	teamArg, errTeam := command.Flags().GetString("team")
+	if errTeam != nil || teamArg == "" {
+		return errors.New("Team is required")
+	}
+	team := getTeamFromTeamArg(app, teamArg)
+	if team == nil {
+		return errors.New("Unable to find team: " + teamArg)
+	}
+
+	userArg, errUser := command.Flags().GetString("user")
+	if errUser != nil || userArg == "" {
+		return errors.New("User is required")
+	}
+	user := getUserFromUserArg(app, userArg)
+	if user == nil {
+		return errors.New("Unable to find user: " + userArg)
+	}
+
+	displayName, errName := command.Flags().GetString("display-name")
+	if errName != nil || displayName == "" {
+		return errors.New("Display name is required")
+	}
+
+	triggerWords, errWords := command.Flags().GetStringArray("trigger-word")
+	if errWords != nil || len(triggerWords) == 0 {
+		return errors.New("Trigger word or words required")
+	}
+
+	callbackURLs, errURL := command.Flags().GetStringArray("url")
+	if errURL != nil || len(callbackURLs) == 0 {
+		return errors.New("Callback URL or URLs required")
+	}
+
+	triggerWhenString, _ := command.Flags().GetString("trigger-when")
+	var triggerWhen int
+	if triggerWhenString == "exact" {
+		triggerWhen = 0
+	} else if triggerWhenString == "start" {
+		triggerWhen = 1
+	} else {
+		return errors.New("Invalid trigger when parameter")
+	}
+	description, _ := command.Flags().GetString("description")
+	contentType, _ := command.Flags().GetString("content-type")
+	iconURL, _ := command.Flags().GetString("icon")
+
+	outgoingWebhook := &model.OutgoingWebhook{
+		CreatorId:    user.Id,
+		Username:     user.Username,
+		TeamId:       team.Id,
+		TriggerWords: triggerWords,
+		TriggerWhen:  triggerWhen,
+		CallbackURLs: callbackURLs,
+		DisplayName:  displayName,
+		Description:  description,
+		ContentType:  contentType,
+		IconURL:      iconURL,
+	}
+
+	channelArg, _ := command.Flags().GetString("channel")
+	if channelArg != "" {
+		channel := getChannelFromChannelArg(app, channelArg)
+		if channel != nil {
+			outgoingWebhook.ChannelId = channel.Id
+		}
+	}
+
+	if _, err := app.CreateOutgoingWebhook(outgoingWebhook); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func deleteWebhookCmdF(command *cobra.Command, args []string) error {
+	app, err := InitDBCommandContextCobra(command)
+	if err != nil {
+		return err
+	}
+	defer app.Shutdown()
+
+	if len(args) < 1 {
+		return errors.New("WebhookID is not specified")
+	}
+
+	webhookId := args[0]
+	errIncomingWebhook := app.DeleteIncomingWebhook(webhookId)
+	errOutgoingWebhook := app.DeleteOutgoingWebhook(webhookId)
+
+	if errIncomingWebhook != nil && errOutgoingWebhook != nil {
+		return errors.New("Unable to delete webhook '" + webhookId + "'")
+	}
+
+	return nil
+}
+
 func init() {
-	WebhookCreateIncomingCmd.Flags().String("channel", "", "Channel ID")
-	WebhookCreateIncomingCmd.Flags().String("user", "", "User ID")
+	WebhookCreateIncomingCmd.Flags().String("channel", "", "Channel ID (required)")
+	WebhookCreateIncomingCmd.Flags().String("user", "", "User ID (required)")
 	WebhookCreateIncomingCmd.Flags().String("display-name", "", "Incoming webhook display name")
 	WebhookCreateIncomingCmd.Flags().String("description", "", "Incoming webhook description")
 	WebhookCreateIncomingCmd.Flags().String("icon", "", "Icon URL")
@@ -191,10 +321,23 @@ func init() {
 	WebhookModifyIncomingCmd.Flags().String("icon", "", "Icon URL")
 	WebhookModifyIncomingCmd.Flags().Bool("lock-to-channel", false, "Lock to channel")
 
+	WebhookCreateOutgoingCmd.Flags().String("team", "", "Team name or ID (required)")
+	WebhookCreateOutgoingCmd.Flags().String("channel", "", "Channel name or ID")
+	WebhookCreateOutgoingCmd.Flags().String("user", "", "User username, email, or ID (required)")
+	WebhookCreateOutgoingCmd.Flags().String("display-name", "", "Outgoing webhook display name (required)")
+	WebhookCreateOutgoingCmd.Flags().String("description", "", "Outgoing webhook description")
+	WebhookCreateOutgoingCmd.Flags().StringArray("trigger-word", []string{}, "Word to trigger webhook (required)")
+	WebhookCreateOutgoingCmd.Flags().String("trigger-when", "exact", "When to trigger webhook (exact: for first word matches a trigger word exactly, start: for first word starts with a trigger word)")
+	WebhookCreateOutgoingCmd.Flags().String("icon", "", "Icon URL")
+	WebhookCreateOutgoingCmd.Flags().StringArray("url", []string{}, "Callback URL (required)")
+	WebhookCreateOutgoingCmd.Flags().String("content-type", "", "Content-type")
+
 	WebhookCmd.AddCommand(
 		WebhookListCmd,
 		WebhookCreateIncomingCmd,
 		WebhookModifyIncomingCmd,
+		WebhookCreateOutgoingCmd,
+		WebhookDeleteCmd,
 	)
 
 	RootCmd.AddCommand(WebhookCmd)

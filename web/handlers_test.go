@@ -11,6 +11,7 @@ import (
 	"github.com/mattermost/mattermost-server/app"
 	"github.com/mattermost/mattermost-server/model"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func handlerForHTTPErrors(c *Context, w http.ResponseWriter, r *http.Request) {
@@ -18,10 +19,11 @@ func handlerForHTTPErrors(c *Context, w http.ResponseWriter, r *http.Request) {
 }
 
 func TestHandlerServeHTTPErrors(t *testing.T) {
-	a, err := app.New(app.StoreOverride(testStore), app.DisableConfigWatch)
-	defer a.Shutdown()
+	s, err := app.NewServer(app.StoreOverride(mainHelper.Store), app.DisableConfigWatch)
+	require.Nil(t, err)
+	defer s.Shutdown()
 
-	web := NewWeb(a, a.Srv.Router)
+	web := New(s, s.AppOptions, s.Router)
 	if err != nil {
 		panic(err)
 	}
@@ -33,8 +35,8 @@ func TestHandlerServeHTTPErrors(t *testing.T) {
 		mobile   bool
 		redirect bool
 	}{
-		{"redirect on destkop non-api endpoint", "/login/sso/saml", false, true},
-		{"not redirect on destkop api endpoint", "/api/v4/test", false, false},
+		{"redirect on desktop non-api endpoint", "/login/sso/saml", false, true},
+		{"not redirect on desktop api endpoint", "/api/v4/test", false, false},
 		{"not redirect on mobile non-api endpoint", "/login/sso/saml", true, false},
 		{"not redirect on mobile api endpoint", "/api/v4/test", true, false},
 	}
@@ -61,15 +63,18 @@ func handlerForHTTPSecureTransport(c *Context, w http.ResponseWriter, r *http.Re
 }
 
 func TestHandlerServeHTTPSecureTransport(t *testing.T) {
-	a, err := app.New(app.StoreOverride(testStore), app.DisableConfigWatch)
-	defer a.Shutdown()
+	s, err := app.NewServer(app.StoreOverride(mainHelper.Store), app.DisableConfigWatch)
+	require.Nil(t, err)
+	defer s.Shutdown()
+
+	a := s.FakeApp()
 
 	a.UpdateConfig(func(config *model.Config) {
 		*config.ServiceSettings.TLSStrictTransport = true
 		*config.ServiceSettings.TLSStrictTransportMaxAge = 6000
 	})
 
-	web := NewWeb(a, a.Srv.Router)
+	web := New(s, s.AppOptions, s.Router)
 	if err != nil {
 		panic(err)
 	}

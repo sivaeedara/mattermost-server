@@ -71,7 +71,7 @@ func ImportUserTeamDataFromTeamMember(member *model.TeamMemberForExport) *UserTe
 	}
 }
 
-func ImportUserChannelDataFromChannelMember(member *model.ChannelMemberForExport) *UserChannelImportData {
+func ImportUserChannelDataFromChannelMemberAndPreferences(member *model.ChannelMemberForExport, preferences *model.Preferences) *UserChannelImportData {
 	rolesList := strings.Fields(member.Roles)
 	if member.SchemeAdmin {
 		rolesList = append(rolesList, model.CHANNEL_ADMIN_ROLE_ID)
@@ -95,11 +95,19 @@ func ImportUserChannelDataFromChannelMember(member *model.ChannelMemberForExport
 		notifyProps.MarkUnread = &markUnread
 	}
 
+	favorite := false
+	for _, preference := range *preferences {
+		if member.ChannelId == preference.Name {
+			favorite = true
+		}
+	}
+
 	roles := strings.Join(rolesList, " ")
 	return &UserChannelImportData{
 		Name:        &member.ChannelName,
 		Roles:       &roles,
 		NotifyProps: &notifyProps,
+		Favorite:    &favorite,
 	}
 }
 
@@ -129,5 +137,15 @@ func ImportReactionFromPost(reaction *model.Reaction) *ReactionImportData {
 		User:      &reaction.UserId,
 		EmojiName: &reaction.EmojiName,
 		CreateAt:  &reaction.CreateAt,
+	}
+}
+
+func ImportLineFromEmoji(emoji *model.Emoji, filePath string) *LineImportData {
+	return &LineImportData{
+		Type: "emoji",
+		Emoji: &EmojiImportData{
+			Name:  &emoji.Name,
+			Image: &filePath,
+		},
 	}
 }

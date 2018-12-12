@@ -211,10 +211,10 @@ func (a *App) CreateChannel(channel *model.Channel, addMember bool) (*model.Chan
 		a.InvalidateCacheForUser(channel.CreatorId)
 	}
 
-	if a.PluginsReady() {
-		a.Go(func() {
-			pluginContext := &plugin.Context{}
-			a.Plugins.RunMultiPluginHook(func(hooks plugin.Hooks) bool {
+	if pluginsEnvironment := a.GetPluginsEnvironment(); pluginsEnvironment != nil {
+		a.Srv.Go(func() {
+			pluginContext := a.PluginContext()
+			pluginsEnvironment.RunMultiPluginHook(func(hooks plugin.Hooks) bool {
 				hooks.ChannelHasBeenCreated(pluginContext, sc)
 				return true
 			}, plugin.ChannelHasBeenCreatedId)
@@ -224,35 +224,42 @@ func (a *App) CreateChannel(channel *model.Channel, addMember bool) (*model.Chan
 	return sc, nil
 }
 
-func (a *App) CreateDirectChannel(userId string, otherUserId string) (*model.Channel, *model.AppError) {
-	channel, err := a.createDirectChannel(userId, otherUserId)
-	if err != nil {
-		if err.Id == store.CHANNEL_EXISTS_ERROR {
+func (a *App) GetOrCreateDirectChannel(userId, otherUserId string) (*model.Channel, *model.AppError) {
+	result := <-a.Srv.Store.Channel().GetByName("", model.GetDMNameFromIds(userId, otherUserId), true)
+	if result.Err != nil {
+		if result.Err.Id == store.MISSING_CHANNEL_ERROR {
+			channel, err := a.createDirectChannel(userId, otherUserId)
+			if err != nil {
+				if err.Id == store.CHANNEL_EXISTS_ERROR {
+					return channel, nil
+				}
+				return nil, err
+			}
+
+			a.WaitForChannelMembership(channel.Id, userId)
+
+			a.InvalidateCacheForUser(userId)
+			a.InvalidateCacheForUser(otherUserId)
+
+			if pluginsEnvironment := a.GetPluginsEnvironment(); pluginsEnvironment != nil {
+				a.Srv.Go(func() {
+					pluginContext := a.PluginContext()
+					pluginsEnvironment.RunMultiPluginHook(func(hooks plugin.Hooks) bool {
+						hooks.ChannelHasBeenCreated(pluginContext, channel)
+						return true
+					}, plugin.ChannelHasBeenCreatedId)
+				})
+			}
+
+			message := model.NewWebSocketEvent(model.WEBSOCKET_EVENT_DIRECT_ADDED, "", channel.Id, "", nil)
+			message.Add("teammate_id", otherUserId)
+			a.Publish(message)
+
 			return channel, nil
 		}
-		return nil, err
+		return nil, model.NewAppError("GetOrCreateDMChannel", "web.incoming_webhook.channel.app_error", nil, "err="+result.Err.Message, result.Err.StatusCode)
 	}
-
-	a.WaitForChannelMembership(channel.Id, userId)
-
-	a.InvalidateCacheForUser(userId)
-	a.InvalidateCacheForUser(otherUserId)
-
-	if a.PluginsReady() {
-		a.Go(func() {
-			pluginContext := &plugin.Context{}
-			a.Plugins.RunMultiPluginHook(func(hooks plugin.Hooks) bool {
-				hooks.ChannelHasBeenCreated(pluginContext, channel)
-				return true
-			}, plugin.ChannelHasBeenCreatedId)
-		})
-	}
-
-	message := model.NewWebSocketEvent(model.WEBSOCKET_EVENT_DIRECT_ADDED, "", channel.Id, "", nil)
-	message.Add("teammate_id", otherUserId)
-	a.Publish(message)
-
-	return channel, nil
+	return result.Data.(*model.Channel), nil
 }
 
 func (a *App) createDirectChannel(userId string, otherUserId string) (*model.Channel, *model.AppError) {
@@ -663,6 +670,10 @@ func (a *App) UpdateChannelMemberNotifyProps(data map[string]string, channelId s
 		member.NotifyProps[model.PUSH_NOTIFY_PROP] = push
 	}
 
+	if ignoreChannelMentions, exists := data[model.IGNORE_CHANNEL_MENTIONS_NOTIFY_PROP]; exists {
+		member.NotifyProps[model.IGNORE_CHANNEL_MENTIONS_NOTIFY_PROP] = ignoreChannelMentions
+	}
+
 	result := <-a.Srv.Store.Channel().UpdateMember(member)
 	if result.Err != nil {
 		return nil, result.Err
@@ -853,10 +864,10 @@ func (a *App) AddChannelMember(userId string, channel *model.Channel, userReques
 		return nil, err
 	}
 
-	if a.PluginsReady() {
-		a.Go(func() {
-			pluginContext := &plugin.Context{}
-			a.Plugins.RunMultiPluginHook(func(hooks plugin.Hooks) bool {
+	if pluginsEnvironment := a.GetPluginsEnvironment(); pluginsEnvironment != nil {
+		a.Srv.Go(func() {
+			pluginContext := a.PluginContext()
+			pluginsEnvironment.RunMultiPluginHook(func(hooks plugin.Hooks) bool {
 				hooks.UserHasJoinedChannel(pluginContext, cm, userRequestor)
 				return true
 			}, plugin.UserHasJoinedChannelId)
@@ -866,7 +877,7 @@ func (a *App) AddChannelMember(userId string, channel *model.Channel, userReques
 	if userRequestorId == "" || userId == userRequestorId {
 		a.postJoinChannelMessage(user, channel)
 	} else {
-		a.Go(func() {
+		a.Srv.Go(func() {
 			a.PostAddToChannelMessage(userRequestor, user, channel, postRootId)
 		})
 	}
@@ -1243,10 +1254,10 @@ func (a *App) JoinChannel(channel *model.Channel, userId string) *model.AppError
 		return err
 	}
 
-	if a.PluginsReady() {
-		a.Go(func() {
-			pluginContext := &plugin.Context{}
-			a.Plugins.RunMultiPluginHook(func(hooks plugin.Hooks) bool {
+	if pluginsEnvironment := a.GetPluginsEnvironment(); pluginsEnvironment != nil {
+		a.Srv.Go(func() {
+			pluginContext := a.PluginContext()
+			pluginsEnvironment.RunMultiPluginHook(func(hooks plugin.Hooks) bool {
 				hooks.UserHasJoinedChannel(pluginContext, cm, nil)
 				return true
 			}, plugin.UserHasJoinedChannelId)
@@ -1336,7 +1347,7 @@ func (a *App) LeaveChannel(channelId string, userId string) *model.AppError {
 		return nil
 	}
 
-	a.Go(func() {
+	a.Srv.Go(func() {
 		a.postLeaveChannelMessage(user, channel)
 	})
 
@@ -1444,16 +1455,15 @@ func (a *App) removeUserFromChannel(userIdToRemove string, removerUserId string,
 	a.InvalidateCacheForUser(userIdToRemove)
 	a.InvalidateCacheForChannelMembers(channel.Id)
 
-	if a.PluginsReady() {
-
+	if pluginsEnvironment := a.GetPluginsEnvironment(); pluginsEnvironment != nil {
 		var actorUser *model.User
 		if removerUserId != "" {
 			actorUser, _ = a.GetUser(removerUserId)
 		}
 
-		a.Go(func() {
-			pluginContext := &plugin.Context{}
-			a.Plugins.RunMultiPluginHook(func(hooks plugin.Hooks) bool {
+		a.Srv.Go(func() {
+			pluginContext := a.PluginContext()
+			pluginsEnvironment.RunMultiPluginHook(func(hooks plugin.Hooks) bool {
 				hooks.UserHasLeftChannel(pluginContext, cm, actorUser)
 				return true
 			}, plugin.UserHasLeftChannelId)
@@ -1489,7 +1499,7 @@ func (a *App) RemoveUserFromChannel(userIdToRemove string, removerUserId string,
 	if userIdToRemove == removerUserId {
 		a.postLeaveChannelMessage(user, channel)
 	} else {
-		a.Go(func() {
+		a.Srv.Go(func() {
 			a.postRemoveFromChannelMessage(removerUserId, user, channel)
 		})
 	}
@@ -1706,13 +1716,15 @@ func (a *App) MoveChannel(team *model.Team, channel *model.Channel, user *model.
 		channelMemberIds = append(channelMemberIds, channelMember.UserId)
 	}
 
-	teamMembers, err2 := a.GetTeamMembersByIds(team.Id, channelMemberIds)
-	if err2 != nil {
-		return err2
-	}
+	if len(channelMemberIds) > 0 {
+		teamMembers, err2 := a.GetTeamMembersByIds(team.Id, channelMemberIds)
+		if err2 != nil {
+			return err2
+		}
 
-	if len(teamMembers) != len(*channelMembers) {
-		return model.NewAppError("MoveChannel", "app.channel.move_channel.members_do_not_match.error", nil, "", http.StatusInternalServerError)
+		if len(teamMembers) != len(*channelMembers) {
+			return model.NewAppError("MoveChannel", "app.channel.move_channel.members_do_not_match.error", nil, "", http.StatusInternalServerError)
+		}
 	}
 
 	// keep instance of the previous team
@@ -1757,32 +1769,6 @@ func (a *App) GetPinnedPosts(channelId string) (*model.PostList, *model.AppError
 		return nil, result.Err
 	}
 	return result.Data.(*model.PostList), nil
-}
-
-func (a *App) GetDirectChannel(userId1, userId2 string) (*model.Channel, *model.AppError) {
-	result := <-a.Srv.Store.Channel().GetByName("", model.GetDMNameFromIds(userId1, userId2), true)
-	if result.Err != nil {
-		if result.Err.Id == store.MISSING_CHANNEL_ERROR {
-			result := <-a.Srv.Store.Channel().CreateDirectChannel(userId1, userId2)
-			if result.Err != nil {
-				return nil, model.NewAppError("GetOrCreateDMChannel", "web.incoming_webhook.channel.app_error", nil, "err="+result.Err.Message, http.StatusBadRequest)
-			}
-			a.InvalidateCacheForUser(userId1)
-			a.InvalidateCacheForUser(userId2)
-
-			channel := result.Data.(*model.Channel)
-			if result := <-a.Srv.Store.ChannelMemberHistory().LogJoinEvent(userId1, channel.Id, model.GetMillis()); result.Err != nil {
-				mlog.Warn(fmt.Sprintf("Failed to update ChannelMemberHistory table %v", result.Err))
-			}
-			if result := <-a.Srv.Store.ChannelMemberHistory().LogJoinEvent(userId2, channel.Id, model.GetMillis()); result.Err != nil {
-				mlog.Warn(fmt.Sprintf("Failed to update ChannelMemberHistory table %v", result.Err))
-			}
-
-			return channel, nil
-		}
-		return nil, model.NewAppError("GetOrCreateDMChannel", "web.incoming_webhook.channel.app_error", nil, "err="+result.Err.Message, result.Err.StatusCode)
-	}
-	return result.Data.(*model.Channel), nil
 }
 
 func (a *App) ToggleMuteChannel(channelId string, userId string) *model.ChannelMember {

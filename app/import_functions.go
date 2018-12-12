@@ -279,6 +279,7 @@ func (a *App) ImportUser(data *UserImportData, dryRun bool) *model.AppError {
 	} else {
 		user = &model.User{}
 		user.MakeNonNil()
+		user.SetDefaultNotifications()
 		hasUserChanged = true
 	}
 
@@ -492,7 +493,7 @@ func (a *App) ImportUser(data *UserImportData, dryRun bool) *model.AppError {
 		if err != nil {
 			mlog.Error("Unable to open the profile image.", mlog.Any("err", err))
 		}
-		if err := a.SetProfileImageFromFile(savedUser.Id, file); err != nil {
+		if err := a.SetProfileImageFromMultiPartFile(savedUser.Id, file); err != nil {
 			mlog.Error("Unable to set the profile image from a file.", mlog.Any("err", err))
 		}
 	}
