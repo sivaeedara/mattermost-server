@@ -31,7 +31,7 @@ How to make it run:
 
 4. If you need to build mattermost-server.
 - Go to mattermost-server
-- Run ``go build cmd/mattermost/main.go``, or for linux-built environment, run ``GOOS=linux go build cmd/mattermost/main.go``
+- Run ``go build -o mattermost cmd/mattermost/main.go``, or for linux-built environment, run ``GOOS=linux go build -o mattermost cmd/mattermost/main.go``
 
 ### [Download Build](https://drive.google.com/open?id=14Mnveq-JcHDDnEltgcJCMCJA-OscAmPx)
 
