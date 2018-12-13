@@ -78,7 +78,7 @@ func (me *RedisCluster) StartInterNodeCommunication() {
 }
 
 func (me *RedisCluster) startConnectListener() {
-	me.app.Go(func() {
+	go func() {
 		//defer close(me.subscribeChan)
 		for {
 			_, ok := <-me.subscribeChan
@@ -91,7 +91,7 @@ func (me *RedisCluster) startConnectListener() {
 			}
 		}
 		mlog.Info("Stopped Redis Cluster Listerner")
-	})
+	}()
 }
 
 func (me *RedisCluster) processRedisMessage(msg *redis.Message) {
@@ -99,12 +99,12 @@ func (me *RedisCluster) processRedisMessage(msg *redis.Message) {
 		clusterMsg := model.ClusterMessageFromJson(bytes.NewReader([]byte(msg.Payload)))
 		if me.redisInstanceId != clusterMsg.Props["instance-id"] {
 			mlog.Debug(fmt.Sprintf("Received redis_event from cluster %v", clusterMsg))
-			me.app.Go(func() {
+			go func() {
 				crm := me.clusterMessageHandler[clusterMsg.Event]
 				if crm != nil {
 					crm(clusterMsg)
 				}
-			})
+			}()
 		} else {
 			mlog.Debug(fmt.Sprintf("Instance %v received its published message. Skip it",
 				me.redisInstanceId))
@@ -117,7 +117,7 @@ func (me *RedisCluster) processRedisMessage(msg *redis.Message) {
 func (me *RedisCluster) subscribe() {
 	mlog.Info("***** starting redis_clustering. Subscribing ... *****")
 	me.pubsub = me.client.Subscribe(me.redisTopic)
-	me.app.Go(func() {
+	func() {
 		for {
 			msg, ok := <-me.pubsub.Channel()
 			if ok {
@@ -127,7 +127,7 @@ func (me *RedisCluster) subscribe() {
 				break
 			}
 		}
-	})
+	}()
 }
 
 func (me *RedisCluster) StopInterNodeCommunication() {
