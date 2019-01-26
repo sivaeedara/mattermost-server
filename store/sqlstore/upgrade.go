@@ -93,6 +93,7 @@ func UpgradeDatabase(sqlStore SqlStore) {
 	UpgradeDatabaseToVersion56(sqlStore)
 	UpgradeDatabaseToVersion57(sqlStore)
 	UpgradeDatabaseToVersion58(sqlStore)
+	UpgradeDatabaseToVersion59(sqlStore)
 
 	// If the SchemaVersion is empty this this is the first time it has ran
 	// so lets set it to the current version.
@@ -564,4 +565,8 @@ func UpgradeDatabaseToVersion58(sqlStore SqlStore) {
 
 	// 	saveSchemaVersion(sqlStore, VERSION_5_8_0)
 	// }
+}
+
+func UpgradeDatabaseToVersion59(sqlStore SqlStore) {
+	sqlStore.CreateColumnIfNotExists("FileInfo", "ChannelId", "varchar(26)", "varchar(26)", "")
 }

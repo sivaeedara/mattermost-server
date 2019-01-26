@@ -66,6 +66,20 @@ func (_m *FileInfoStore) Get(id string) store.StoreChannel {
 	return r0
 }
 
+func (_m *FileInfoStore) GetByChannelId(channelId string, offset int, limit int) store.StoreChannel {
+	ret := _m.Called(channelId, offset, limit)
+
+	var r0 store.StoreChannel
+	if rf, ok := ret.Get(0).(func(string, int, int) store.StoreChannel); ok {
+		r0 = rf(channelId, offset, limit)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(store.StoreChannel)
+		}
+	}
+	return r0
+}
+
 // GetByPath provides a mock function with given fields: path
 func (_m *FileInfoStore) GetByPath(path string) store.StoreChannel {
 	ret := _m.Called(path)
@@ -131,7 +145,6 @@ func (_m *FileInfoStore) PermanentDelete(fileId string) store.StoreChannel {
 			r0 = ret.Get(0).(store.StoreChannel)
 		}
 	}
-
 	return r0
 }
 

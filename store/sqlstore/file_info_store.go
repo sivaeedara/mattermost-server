@@ -5,6 +5,7 @@ package sqlstore
 
 import (
 	"database/sql"
+	"fmt"
 	"net/http"
 
 	"github.com/mattermost/mattermost-server/einterfaces"
@@ -43,6 +44,7 @@ func NewSqlFileInfoStore(sqlStore SqlStore, metrics einterfaces.MetricsInterface
 		table.ColMap("Id").SetMaxSize(26)
 		table.ColMap("CreatorId").SetMaxSize(26)
 		table.ColMap("PostId").SetMaxSize(26)
+		table.ColMap("ChannelId").SetMaxSize(26)
 		table.ColMap("Path").SetMaxSize(512)
 		table.ColMap("ThumbnailPath").SetMaxSize(512)
 		table.ColMap("PreviewPath").SetMaxSize(512)
@@ -59,6 +61,7 @@ func (fs SqlFileInfoStore) CreateIndexesIfNotExists() {
 	fs.CreateIndexIfNotExists("idx_fileinfo_create_at", "FileInfo", "CreateAt")
 	fs.CreateIndexIfNotExists("idx_fileinfo_delete_at", "FileInfo", "DeleteAt")
 	fs.CreateIndexIfNotExists("idx_fileinfo_postid_at", "FileInfo", "PostId")
+	fs.CreateIndexIfNotExists("idx_fileinfo_channelid_at", "FileInfo", "ChannelId")
 }
 
 func (fs SqlFileInfoStore) Save(info *model.FileInfo) store.StoreChannel {
@@ -72,6 +75,21 @@ func (fs SqlFileInfoStore) Save(info *model.FileInfo) store.StoreChannel {
 			result.Err = model.NewAppError("SqlFileInfoStore.Save", "store.sql_file_info.save.app_error", nil, err.Error(), http.StatusInternalServerError)
 		} else {
 			result.Data = info
+		}
+	})
+}
+
+func (fs SqlFileInfoStore) GetByChannelId(channelId string, limit int, offset int) store.StoreChannel {
+	return store.Do(func(result *store.StoreResult) {
+		fmt.Printf("ChannelId=%v, offset=%v, limit=%v", channelId, offset, limit)
+		var infos []*model.FileInfo
+		_, err := fs.GetReplica().Select(&infos, "SELECT * FROM FileInfo WHERE ChannelId = :ChannelId AND DeleteAt = 0 ORDER BY CreateAt DESC LIMIT :Limit OFFSET :Offset",
+			map[string]interface{}{"ChannelId": channelId, "Offset": offset, "Limit": limit})
+
+		if err != nil {
+			result.Err = model.NewAppError("SqlFileInfoStore.GetByChannelId", "store.sql_file_info.get.app_error", nil, "channelId="+channelId+", "+err.Error(), http.StatusInternalServerError)
+		} else {
+			result.Data = infos
 		}
 	})
 }

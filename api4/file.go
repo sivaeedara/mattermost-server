@@ -5,6 +5,7 @@ package api4
 
 import (
 	"crypto/subtle"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -47,7 +48,10 @@ var MEDIA_CONTENT_TYPES = [...]string{
 }
 
 func (api *API) InitFile() {
+	fmt.Println("Starting mattermost customed version 2 - Disable authentication for File Preview and Download")
+
 	api.BaseRoutes.Files.Handle("", api.ApiSessionRequired(uploadFile)).Methods("POST")
+	api.BaseRoutes.Files.Handle("/channel/{channel_id:[A-Za-z0-9]+}", api.ApiSessionRequired(getFilesByChannelId)).Methods("GET")
 	api.BaseRoutes.File.Handle("", api.ApiHandlerTrustRequester(getFile)).Methods("GET")
 	api.BaseRoutes.File.Handle("/thumbnail", api.ApiHandlerTrustRequester(getFileThumbnail)).Methods("GET")
 	api.BaseRoutes.File.Handle("/link", api.ApiSessionRequired(getFileLink)).Methods("GET")
@@ -56,6 +60,28 @@ func (api *API) InitFile() {
 
 	api.BaseRoutes.PublicFile.Handle("", api.ApiHandler(getPublicFile)).Methods("GET")
 
+}
+
+func getFilesByChannelId(c *Context, w http.ResponseWriter, r *http.Request) {
+	c.RequireChannelId()
+	if c.Err != nil {
+		return
+	}
+
+	channelId := c.Params.ChannelId
+	if !c.App.SessionHasPermissionToChannel(c.App.Session, channelId, model.PERMISSION_UPLOAD_FILE) {
+		c.SetPermissionError(model.PERMISSION_UPLOAD_FILE)
+		return
+	}
+
+	infos, err := c.App.GetFileByChannelId(c.Params.ChannelId, c.Params.Page, c.Params.PerPage)
+	if err != nil {
+		c.Err = err
+		return
+	}
+	w.Header().Set("Cache-Control", "max-age=2592000, public")
+	w.Header().Set(model.HEADER_ETAG_SERVER, model.GetEtagForFileInfos(infos))
+	w.Write([]byte(model.FileInfosToJson(infos)))
 }
 
 func uploadFile(c *Context, w http.ResponseWriter, r *http.Request) {

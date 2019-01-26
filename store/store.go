@@ -449,6 +449,7 @@ type StatusStore interface {
 type FileInfoStore interface {
 	Save(info *model.FileInfo) StoreChannel
 	Get(id string) StoreChannel
+	GetByChannelId(channelId string, limit int, offset int) StoreChannel
 	GetByPath(path string) StoreChannel
 	GetForPost(postId string, readFromMaster bool, allowFromCache bool) StoreChannel
 	GetForUser(userId string) StoreChannel

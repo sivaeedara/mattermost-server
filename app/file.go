@@ -428,6 +428,7 @@ func (a *App) DoUploadFileExpectModification(now time.Time, rawTeamId string, ra
 	userId := filepath.Base(rawUserId)
 
 	info, err := model.GetInfoForBytes(filename, data)
+	info.ChannelId = channelId
 	if err != nil {
 		err.StatusCode = http.StatusBadRequest
 		return nil, data, err
@@ -638,6 +639,14 @@ func (a *App) GetFileInfo(fileId string) (*model.FileInfo, *model.AppError) {
 		return nil, result.Err
 	}
 	return result.Data.(*model.FileInfo), nil
+}
+
+func (a *App) GetFileByChannelId(channelId string, page, perPage int) ([]*model.FileInfo, *model.AppError) {
+	result := <-a.Srv.Store.FileInfo().GetByChannelId(channelId, perPage, page*perPage)
+	if result.Err != nil {
+		return nil, result.Err
+	}
+	return result.Data.([]*model.FileInfo), nil
 }
 
 func (a *App) CopyFileInfos(userId string, fileIds []string) ([]string, *model.AppError) {
