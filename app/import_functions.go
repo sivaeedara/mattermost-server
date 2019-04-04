@@ -369,6 +369,13 @@ func (a *App) ImportUser(data *UserImportData, dryRun bool) *model.AppError {
 		}
 	}
 
+	if data.DeleteAt != nil {
+		if user.DeleteAt != *data.DeleteAt {
+			user.DeleteAt = *data.DeleteAt
+			hasUserChanged = true
+		}
+	}
+
 	var roles string
 	if data.Roles != nil {
 		if user.Roles != *data.Roles {
@@ -439,6 +446,8 @@ func (a *App) ImportUser(data *UserImportData, dryRun bool) *model.AppError {
 				user.AddNotifyProp(model.MENTION_KEYS_NOTIFY_PROP, *data.NotifyProps.MentionKeys)
 				hasNotifyPropsChanged = true
 			}
+		} else {
+			user.UpdateMentionKeysFromUsername("")
 		}
 	}
 
@@ -477,7 +486,7 @@ func (a *App) ImportUser(data *UserImportData, dryRun bool) *model.AppError {
 		}
 		if emailVerified {
 			if hasUserEmailVerifiedChanged {
-				if err := a.VerifyUserEmail(user.Id); err != nil {
+				if err := a.VerifyUserEmail(user.Id, user.Email); err != nil {
 					return err
 				}
 			}
@@ -664,7 +673,7 @@ func (a *App) ImportUserTeams(user *model.User, data *[]UserTeamImportData) *mod
 		}
 
 		if member.ExplicitRoles != roles {
-			if _, err := a.UpdateTeamMemberRoles(team.Id, user.Id, roles); err != nil {
+			if _, err = a.UpdateTeamMemberRoles(team.Id, user.Id, roles); err != nil {
 				return err
 			}
 		}
@@ -1028,7 +1037,7 @@ func (a *App) uploadAttachments(attachments *[]AttachmentImportData, post *model
 
 func (a *App) UpdateFileInfoWithPostId(post *model.Post) {
 	for _, fileId := range post.FileIds {
-		if result := <-a.Srv.Store.FileInfo().AttachToPost(fileId, post.Id); result.Err != nil {
+		if result := <-a.Srv.Store.FileInfo().AttachToPost(fileId, post.Id, post.UserId); result.Err != nil {
 			mlog.Error(fmt.Sprintf("Error attaching files to post. postId=%v, fileIds=%v, message=%v", post.Id, post.FileIds, result.Err), mlog.String("post_id", post.Id))
 		}
 	}

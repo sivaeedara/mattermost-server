@@ -61,22 +61,6 @@ func (_m *UserStore) AnalyticsGetSystemAdminCount() store.StoreChannel {
 	return r0
 }
 
-// AnalyticsUniqueUserCount provides a mock function with given fields: teamId
-func (_m *UserStore) AnalyticsUniqueUserCount(teamId string) store.StoreChannel {
-	ret := _m.Called(teamId)
-
-	var r0 store.StoreChannel
-	if rf, ok := ret.Get(0).(func(string) store.StoreChannel); ok {
-		r0 = rf(teamId)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(store.StoreChannel)
-		}
-	}
-
-	return r0
-}
-
 // ClearAllCustomRoleAssignments provides a mock function with given fields:
 func (_m *UserStore) ClearAllCustomRoleAssignments() store.StoreChannel {
 	ret := _m.Called()
@@ -96,6 +80,22 @@ func (_m *UserStore) ClearAllCustomRoleAssignments() store.StoreChannel {
 // ClearCaches provides a mock function with given fields:
 func (_m *UserStore) ClearCaches() {
 	_m.Called()
+}
+
+// Count provides a mock function with given fields: options
+func (_m *UserStore) Count(options model.UserCountOptions) store.StoreChannel {
+	ret := _m.Called(options)
+
+	var r0 store.StoreChannel
+	if rf, ok := ret.Get(0).(func(model.UserCountOptions) store.StoreChannel); ok {
+		r0 = rf(options)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(store.StoreChannel)
+		}
+	}
+
+	return r0
 }
 
 // Get provides a mock function with given fields: id
@@ -146,13 +146,13 @@ func (_m *UserStore) GetAllAfter(limit int, afterId string) store.StoreChannel {
 	return r0
 }
 
-// GetAllProfiles provides a mock function with given fields: offset, limit
-func (_m *UserStore) GetAllProfiles(offset int, limit int) store.StoreChannel {
-	ret := _m.Called(offset, limit)
+// GetAllProfiles provides a mock function with given fields: options
+func (_m *UserStore) GetAllProfiles(options *model.UserGetOptions) store.StoreChannel {
+	ret := _m.Called(options)
 
 	var r0 store.StoreChannel
-	if rf, ok := ret.Get(0).(func(int, int) store.StoreChannel); ok {
-		r0 = rf(offset, limit)
+	if rf, ok := ret.Get(0).(func(*model.UserGetOptions) store.StoreChannel); ok {
+		r0 = rf(options)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(store.StoreChannel)
@@ -354,13 +354,13 @@ func (_m *UserStore) GetProfileByIds(userId []string, allowFromCache bool) store
 	return r0
 }
 
-// GetProfiles provides a mock function with given fields: teamId, offset, limit
-func (_m *UserStore) GetProfiles(teamId string, offset int, limit int) store.StoreChannel {
-	ret := _m.Called(teamId, offset, limit)
+// GetProfiles provides a mock function with given fields: options
+func (_m *UserStore) GetProfiles(options *model.UserGetOptions) store.StoreChannel {
+	ret := _m.Called(options)
 
 	var r0 store.StoreChannel
-	if rf, ok := ret.Get(0).(func(string, int, int) store.StoreChannel); ok {
-		r0 = rf(teamId, offset, limit)
+	if rf, ok := ret.Get(0).(func(*model.UserGetOptions) store.StoreChannel); ok {
+		r0 = rf(options)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(store.StoreChannel)
@@ -498,22 +498,6 @@ func (_m *UserStore) GetSystemAdminProfiles() store.StoreChannel {
 	return r0
 }
 
-// GetTotalUsersCount provides a mock function with given fields:
-func (_m *UserStore) GetTotalUsersCount() store.StoreChannel {
-	ret := _m.Called()
-
-	var r0 store.StoreChannel
-	if rf, ok := ret.Get(0).(func() store.StoreChannel); ok {
-		r0 = rf()
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(store.StoreChannel)
-		}
-	}
-
-	return r0
-}
-
 // GetUnreadCount provides a mock function with given fields: userId
 func (_m *UserStore) GetUnreadCount(userId string) store.StoreChannel {
 	ret := _m.Called(userId)
@@ -537,6 +521,22 @@ func (_m *UserStore) GetUnreadCountForChannel(userId string, channelId string) s
 	var r0 store.StoreChannel
 	if rf, ok := ret.Get(0).(func(string, string) store.StoreChannel); ok {
 		r0 = rf(userId, channelId)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(store.StoreChannel)
+		}
+	}
+
+	return r0
+}
+
+// GetUsersBatchForIndexing provides a mock function with given fields: startTime, endTime, limit
+func (_m *UserStore) GetUsersBatchForIndexing(startTime int64, endTime int64, limit int) store.StoreChannel {
+	ret := _m.Called(startTime, endTime, limit)
+
+	var r0 store.StoreChannel
+	if rf, ok := ret.Get(0).(func(int64, int64, int) store.StoreChannel); ok {
+		r0 = rf(startTime, endTime, limit)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(store.StoreChannel)
@@ -833,13 +833,13 @@ func (_m *UserStore) UpdateUpdateAt(userId string) store.StoreChannel {
 	return r0
 }
 
-// VerifyEmail provides a mock function with given fields: userId
-func (_m *UserStore) VerifyEmail(userId string) store.StoreChannel {
-	ret := _m.Called(userId)
+// VerifyEmail provides a mock function with given fields: userId, email
+func (_m *UserStore) VerifyEmail(userId string, email string) store.StoreChannel {
+	ret := _m.Called(userId, email)
 
 	var r0 store.StoreChannel
-	if rf, ok := ret.Get(0).(func(string) store.StoreChannel); ok {
-		r0 = rf(userId)
+	if rf, ok := ret.Get(0).(func(string, string) store.StoreChannel); ok {
+		r0 = rf(userId, email)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(store.StoreChannel)

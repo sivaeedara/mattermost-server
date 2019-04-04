@@ -4,17 +4,25 @@
 package sqlstore
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/pkg/errors"
+
 	"github.com/mattermost/mattermost-server/mlog"
 	"github.com/mattermost/mattermost-server/model"
+	"github.com/mattermost/mattermost-server/services/timezones"
 )
 
 const (
+	VERSION_5_11_0           = "5.11.0"
+	VERSION_5_10_0           = "5.10.0"
+	VERSION_5_9_0            = "5.9.0"
+	VERSION_5_8_0            = "5.8.0"
 	VERSION_5_7_0            = "5.7.0"
 	VERSION_5_6_0            = "5.6.0"
 	VERSION_5_5_0            = "5.5.0"
@@ -52,10 +60,11 @@ const (
 )
 
 const (
-	EXIT_VERSION_SAVE_MISSING = 1001
-	EXIT_TOO_OLD              = 1002
-	EXIT_VERSION_SAVE         = 1003
-	EXIT_THEME_MIGRATION      = 1004
+	EXIT_VERSION_SAVE_MISSING  = 1001
+	EXIT_TOO_OLD               = 1002
+	EXIT_VERSION_SAVE          = 1003
+	EXIT_THEME_MIGRATION       = 1004
+	EXIT_ROLE_MIGRATION_FAILED = 1005
 )
 
 func UpgradeDatabase(sqlStore SqlStore) {
@@ -94,6 +103,10 @@ func UpgradeDatabase(sqlStore SqlStore) {
 	UpgradeDatabaseToVersion57(sqlStore)
 	UpgradeDatabaseToVersion58(sqlStore)
 	UpgradeDatabaseToVersion59(sqlStore)
+	UpgradeDatabaseToVersion59_1(sqlStore)
+
+	UpgradeDatabaseToVersion510(sqlStore)
+	UpgradeDatabaseToVersion511(sqlStore)
 
 	// If the SchemaVersion is empty this this is the first time it has ran
 	// so lets set it to the current version.
@@ -169,15 +182,18 @@ func UpgradeDatabaseToVersion33(sqlStore SqlStore) {
 			if err != nil {
 				themeMigrationFailed(err)
 			}
+			defer finalizeTransaction(transaction)
 
 			// increase size of Value column of Preferences table to match the size of the ThemeProps column
 			if sqlStore.DriverName() == model.DATABASE_DRIVER_POSTGRES {
 				if _, err := transaction.Exec("ALTER TABLE Preferences ALTER COLUMN Value TYPE varchar(2000)"); err != nil {
 					themeMigrationFailed(err)
+					return
 				}
 			} else if sqlStore.DriverName() == model.DATABASE_DRIVER_MYSQL {
 				if _, err := transaction.Exec("ALTER TABLE Preferences MODIFY Value text"); err != nil {
 					themeMigrationFailed(err)
+					return
 				}
 			}
 
@@ -192,15 +208,18 @@ func UpgradeDatabaseToVersion33(sqlStore SqlStore) {
 				WHERE
 					Users.ThemeProps != 'null'`, params); err != nil {
 				themeMigrationFailed(err)
+				return
 			}
 
 			// delete old data
 			if _, err := transaction.Exec("ALTER TABLE Users DROP COLUMN ThemeProps"); err != nil {
 				themeMigrationFailed(err)
+				return
 			}
 
 			if err := transaction.Commit(); err != nil {
 				themeMigrationFailed(err)
+				return
 			}
 
 			// rename solarized_* code themes to solarized-* to match client changes in 3.0
@@ -417,7 +436,7 @@ func UpgradeDatabaseToVersion49(sqlStore SqlStore) {
 
 	if shouldPerformUpgrade(sqlStore, VERSION_4_8_1, VERSION_4_9_0) {
 		sqlStore.CreateColumnIfNotExists("Teams", "LastTeamIconUpdate", "bigint", "bigint", "0")
-		defaultTimezone := model.DefaultUserTimezone()
+		defaultTimezone := timezones.DefaultUserTimezone()
 		defaultTimezoneValue, err := json.Marshal(defaultTimezone)
 		if err != nil {
 			mlog.Critical(fmt.Sprint(err))
@@ -532,41 +551,112 @@ func UpgradeDatabaseToVersion56(sqlStore SqlStore) {
 			sqlStore.RemoveIndexIfExists("idx_users_firstname_lower", "lower(FirstName)")
 			sqlStore.RemoveIndexIfExists("idx_users_lastname_lower", "lower(LastName)")
 		}
+
 		saveSchemaVersion(sqlStore, VERSION_5_6_0)
 	}
 
 }
 
 func UpgradeDatabaseToVersion57(sqlStore SqlStore) {
-	// TODO: Uncomment following condition when version 5.7.0 is released
-	// if shouldPerformUpgrade(sqlStore, VERSION_5_6_0, VERSION_5_7_0) {
+	if shouldPerformUpgrade(sqlStore, VERSION_5_6_0, VERSION_5_7_0) {
+		saveSchemaVersion(sqlStore, VERSION_5_7_0)
+	}
+}
 
-	// 	saveSchemaVersion(sqlStore, VERSION_5_7_0)
-	// }
+func getRole(sqlStore SqlStore, name string) (*model.Role, error) {
+	var dbRole Role
+
+	if err := sqlStore.GetReplica().SelectOne(&dbRole, "SELECT * from Roles WHERE Name = :Name", map[string]interface{}{"Name": name}); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, errors.Wrapf(err, "failed to find role %s", name)
+		} else {
+			return nil, errors.Wrapf(err, "failed to query role %s", name)
+		}
+	}
+
+	return dbRole.ToModel(), nil
+}
+
+func saveRole(sqlStore SqlStore, role *model.Role) error {
+	dbRole := NewRoleFromModel(role)
+
+	dbRole.UpdateAt = model.GetMillis()
+	if rowsChanged, err := sqlStore.GetMaster().Update(dbRole); err != nil {
+		return errors.Wrap(err, "failed to update role")
+	} else if rowsChanged != 1 {
+		return errors.New("found no role to update")
+	}
+
+	return nil
 }
 
 func UpgradeDatabaseToVersion58(sqlStore SqlStore) {
-	// TODO: Uncomment following condition when version 5.8.0 is released
-	// if shouldPerformUpgrade(sqlStore, VERSION_5_7_0, VERSION_5_8_0) {
+	if shouldPerformUpgrade(sqlStore, VERSION_5_7_0, VERSION_5_8_0) {
+		// idx_channels_txt was removed in `UpgradeDatabaseToVersion50`, but merged as part of
+		// v5.1, so the migration wouldn't apply to anyone upgrading from v5.0. Remove it again to
+		// bring the upgraded (from v5.0) and fresh install schemas back in sync.
+		sqlStore.RemoveIndexIfExists("idx_channels_txt", "Channels")
 
-	// idx_channels_txt was removed in `UpgradeDatabaseToVersion50`, but merged as part of
-	// v5.1, so the migration wouldn't apply to anyone upgrading from v5.0. Remove it again to
-	// bring the upgraded (from v5.0) and fresh install schemas back in sync.
-	sqlStore.RemoveIndexIfExists("idx_channels_txt", "Channels")
+		// Fix column types and defaults where gorp converged on a different schema value than the
+		// original migration.
+		sqlStore.AlterColumnTypeIfExists("OutgoingWebhooks", "Description", "text", "VARCHAR(500)")
+		sqlStore.AlterColumnTypeIfExists("IncomingWebhooks", "Description", "text", "VARCHAR(500)")
+		sqlStore.AlterColumnTypeIfExists("OutgoingWebhooks", "IconURL", "text", "VARCHAR(1024)")
+		sqlStore.AlterColumnDefaultIfExists("OutgoingWebhooks", "Username", model.NewString("NULL"), model.NewString(""))
+		sqlStore.AlterColumnDefaultIfExists("OutgoingWebhooks", "IconURL", nil, model.NewString(""))
+		sqlStore.AlterColumnDefaultIfExists("PluginKeyValueStore", "ExpireAt", model.NewString("NULL"), model.NewString("NULL"))
 
-	// Fix column types and defaults where gorp converged on a different schema value than the
-	// original migration.
-	sqlStore.AlterColumnTypeIfExists("OutgoingWebhooks", "Description", "text", "VARCHAR(500)")
-	sqlStore.AlterColumnTypeIfExists("IncomingWebhooks", "Description", "text", "VARCHAR(500)")
-	sqlStore.AlterColumnTypeIfExists("OutgoingWebhooks", "IconURL", "text", "VARCHAR(1024)")
-	sqlStore.AlterColumnDefaultIfExists("OutgoingWebhooks", "Username", model.NewString("NULL"), model.NewString(""))
-	sqlStore.AlterColumnDefaultIfExists("OutgoingWebhooks", "IconURL", nil, model.NewString(""))
-	sqlStore.AlterColumnDefaultIfExists("PluginKeyValueStore", "ExpireAt", model.NewString("NULL"), model.NewString("NULL"))
-
-	// 	saveSchemaVersion(sqlStore, VERSION_5_8_0)
-	// }
+		saveSchemaVersion(sqlStore, VERSION_5_8_0)
+	}
 }
 
 func UpgradeDatabaseToVersion59(sqlStore SqlStore) {
+	if shouldPerformUpgrade(sqlStore, VERSION_5_8_0, VERSION_5_9_0) {
+		saveSchemaVersion(sqlStore, VERSION_5_9_0)
+	}
+}
+
+func UpgradeDatabaseToVersion510(sqlStore SqlStore) {
+	if shouldPerformUpgrade(sqlStore, VERSION_5_9_0, VERSION_5_10_0) {
+
+		// Grant new bot permissions to the system admin. Ideally we'd use the RoleStore directly,
+		// but it uses the new supplier model, which isn't initialized in the UpgradeDatabase code
+		// path. Also, the role won't exist for new servers, so don't fail on fetch, and don't
+		// bother inserting since it will be created with the new permissions anyway.
+		if role, err := getRole(sqlStore, model.SYSTEM_ADMIN_ROLE_ID); err != nil {
+			mlog.Warn("Failed to find role " + model.SYSTEM_ADMIN_ROLE_ID + " for upgrade: " + err.Error())
+		} else {
+			role.Permissions = append(role.Permissions, model.PERMISSION_CREATE_BOT.Id)
+			role.Permissions = append(role.Permissions, model.PERMISSION_READ_BOTS.Id)
+			role.Permissions = append(role.Permissions, model.PERMISSION_READ_OTHERS_BOTS.Id)
+			role.Permissions = append(role.Permissions, model.PERMISSION_MANAGE_BOTS.Id)
+			role.Permissions = append(role.Permissions, model.PERMISSION_MANAGE_OTHERS_BOTS.Id)
+
+			if err := saveRole(sqlStore, role); err != nil {
+				mlog.Critical(err.Error())
+				time.Sleep(time.Second)
+				os.Exit(EXIT_ROLE_MIGRATION_FAILED)
+			}
+		}
+
+		sqlStore.CreateColumnIfNotExistsNoDefault("Channels", "GroupConstrained", "tinyint(4)", "boolean")
+		sqlStore.CreateColumnIfNotExistsNoDefault("Teams", "GroupConstrained", "tinyint(4)", "boolean")
+
+		sqlStore.CreateIndexIfNotExists("idx_groupteams_teamid", "GroupTeams", "TeamId")
+		sqlStore.CreateIndexIfNotExists("idx_groupchannels_channelid", "GroupChannels", "ChannelId")
+
+		saveSchemaVersion(sqlStore, VERSION_5_10_0)
+	}
+}
+
+func UpgradeDatabaseToVersion511(sqlStore SqlStore) {
+	// TODO: Uncomment following condition when version 5.11.0 is released
+	// if shouldPerformUpgrade(sqlStore, VERSION_5_10_0, VERSION_5_11_0) {
+
+	// 	saveSchemaVersion(sqlStore, VERSION_5_11_0)
+	// }
+}
+
+func UpgradeDatabaseToVersion59_1(sqlStore SqlStore) {
 	sqlStore.CreateColumnIfNotExists("FileInfo", "ChannelId", "varchar(26)", "varchar(26)", "")
 }

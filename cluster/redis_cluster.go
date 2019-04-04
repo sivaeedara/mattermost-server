@@ -17,7 +17,7 @@ var logClusterUnsupport = []string{`we don't support log live monitoring for red
 
 //RedisCluster redis cluster implementation
 type RedisCluster struct {
-	app *app.App
+	server *app.Server
 	einterfaces.ClusterInterface
 	clusterMessageHandler map[string]einterfaces.ClusterMessageHandler
 	client                *redis.Client
@@ -31,15 +31,15 @@ type RedisCluster struct {
 
 func init() {
 	log.Printf("***** Loading redis clustering *******")
-	app.RegisterClusterInterface(func(a *app.App) einterfaces.ClusterInterface {
-		settings := &a.GetConfig().RedisSettings
+	app.RegisterClusterInterface(func(s *app.Server) einterfaces.ClusterInterface {
+		settings := &s.Config().RedisSettings
 		if !*settings.EnableRedisCluster || !*settings.Enable {
 			mlog.Warn("To use redis cluster, please enable redis and redis cluster")
 			return nil
 		}
 		rdCluster := &RedisCluster{}
 		rdCluster.subscribeChan = make(chan int, 1)
-		rdCluster.app = a
+		rdCluster.server = s
 		rdCluster.settings = settings
 		rdCluster.clusterMessageHandler = make(map[string]einterfaces.ClusterMessageHandler)
 		if *rdCluster.settings.Enable {
@@ -52,7 +52,7 @@ func init() {
 				option.Password = *settings.Password
 			}
 			rdCluster.client = redis.NewClient(option)
-			clusterName := *a.GetConfig().ClusterSettings.ClusterName
+			clusterName := *s.Config().ClusterSettings.ClusterName
 
 			if clusterName == "" {
 				clusterName = "vincere-chat"

@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/mattermost/mattermost-server/mlog"
 	"github.com/mattermost/mattermost-server/model"
@@ -158,7 +159,7 @@ func (a *App) SendNotifications(post *model.Post, team *model.Team, channel *mod
 		sender:     sender,
 	}
 
-	if a.Config().EmailSettings.SendEmailNotifications {
+	if *a.Config().EmailSettings.SendEmailNotifications {
 		for _, id := range mentionedUsersList {
 			if profileMap[id] == nil {
 				continue
@@ -180,7 +181,7 @@ func (a *App) SendNotifications(post *model.Post, team *model.Team, channel *mod
 			}
 
 			//If email verification is required and user email is not verified don't send email.
-			if a.Config().EmailSettings.RequireEmailVerification && !profileMap[id].EmailVerified {
+			if *a.Config().EmailSettings.RequireEmailVerification && !profileMap[id].EmailVerified {
 				mlog.Error(fmt.Sprintf("Skipped sending notification email to %v, address not verified. [details: user_id=%v]", profileMap[id].Email, id))
 				continue
 			}
@@ -325,7 +326,7 @@ func (a *App) SendNotifications(post *model.Post, team *model.Team, channel *mod
 	message.Add("channel_type", channel.Type)
 	message.Add("channel_display_name", notification.GetChannelName(model.SHOW_USERNAME, ""))
 	message.Add("channel_name", channel.Name)
-	message.Add("sender_name", notification.GetSenderName(model.SHOW_USERNAME, a.Config().ServiceSettings.EnablePostUsernameOverride))
+	message.Add("sender_name", notification.GetSenderName(model.SHOW_USERNAME, *a.Config().ServiceSettings.EnablePostUsernameOverride))
 	message.Add("team_id", team.Id)
 
 	if len(post.FileIds) != 0 && fchan != nil {
@@ -468,6 +469,14 @@ func GetExplicitMentions(post *model.Post, keywords map[string][]string) *Explic
 
 		return isMention
 	}
+
+	var multibyteKeywords []string
+	for keyword := range keywords {
+		if len(keyword) != utf8.RuneCountInString(keyword) {
+			multibyteKeywords = append(multibyteKeywords, keyword)
+		}
+	}
+
 	processText := func(text string) {
 		for _, word := range strings.FieldsFunc(text, func(c rune) bool {
 			// Split on any whitespace or punctuation that can't be part of an at mention or emoji pattern
@@ -513,6 +522,17 @@ func GetExplicitMentions(post *model.Post, keywords map[string][]string) *Explic
 					}
 					if _, ok := systemMentions[splitWord]; !ok && strings.HasPrefix(splitWord, "@") {
 						ret.OtherPotentialMentions = append(ret.OtherPotentialMentions, splitWord[1:])
+					}
+				}
+			}
+
+			// If word contains a multibyte character, check if it contains a multibyte keyword
+			if len(word) != utf8.RuneCountInString(word) {
+				for _, key := range multibyteKeywords {
+					if strings.Contains(word, key) {
+						if ids, match := keywords[key]; match {
+							addMentionedUsers(ids)
+						}
 					}
 				}
 			}

@@ -4,31 +4,25 @@
 package api4
 
 import (
-	"bytes"
+	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"runtime"
 
 	"github.com/mattermost/mattermost-server/mlog"
 	"github.com/mattermost/mattermost-server/model"
 	"github.com/mattermost/mattermost-server/services/filesstore"
+	"github.com/mattermost/mattermost-server/utils"
 )
+
+const REDIRECT_LOCATION_CACHE_SIZE = 10000
+
+var redirectLocationDataCache = utils.NewLru(REDIRECT_LOCATION_CACHE_SIZE)
 
 func (api *API) InitSystem() {
 	api.BaseRoutes.System.Handle("/ping", api.ApiHandler(getSystemPing)).Methods("GET")
 
 	api.BaseRoutes.System.Handle("/timezones", api.ApiSessionRequired(getSupportedTimezones)).Methods("GET")
-
-	api.BaseRoutes.ApiRoot.Handle("/config", api.ApiSessionRequired(getConfig)).Methods("GET")
-	api.BaseRoutes.ApiRoot.Handle("/config", api.ApiSessionRequired(updateConfig)).Methods("PUT")
-	api.BaseRoutes.ApiRoot.Handle("/config/reload", api.ApiSessionRequired(configReload)).Methods("POST")
-	api.BaseRoutes.ApiRoot.Handle("/config/client", api.ApiHandler(getClientConfig)).Methods("GET")
-	api.BaseRoutes.ApiRoot.Handle("/config/environment", api.ApiSessionRequired(getEnvironmentConfig)).Methods("GET")
-
-	api.BaseRoutes.ApiRoot.Handle("/license", api.ApiSessionRequired(addLicense)).Methods("POST")
-	api.BaseRoutes.ApiRoot.Handle("/license", api.ApiSessionRequired(removeLicense)).Methods("DELETE")
-	api.BaseRoutes.ApiRoot.Handle("/license/client", api.ApiHandler(getClientLicense)).Methods("GET")
 
 	api.BaseRoutes.ApiRoot.Handle("/audits", api.ApiSessionRequired(getAudits)).Methods("GET")
 	api.BaseRoutes.ApiRoot.Handle("/email/test", api.ApiSessionRequired(testEmail)).Methods("POST")
@@ -82,6 +76,11 @@ func testEmail(c *Context, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if *c.App.Config().ExperimentalSettings.RestrictSystemAdmin {
+		c.Err = model.NewAppError("testEmail", "api.restricted_system_admin", nil, "", http.StatusForbidden)
+		return
+	}
+
 	err := c.App.TestEmail(c.App.Session.UserId, cfg)
 	if err != nil {
 		c.Err = err
@@ -89,73 +88,6 @@ func testEmail(c *Context, w http.ResponseWriter, r *http.Request) {
 	}
 
 	ReturnStatusOK(w)
-}
-
-func getConfig(c *Context, w http.ResponseWriter, r *http.Request) {
-	if !c.App.SessionHasPermissionTo(c.App.Session, model.PERMISSION_MANAGE_SYSTEM) {
-		c.SetPermissionError(model.PERMISSION_MANAGE_SYSTEM)
-		return
-	}
-
-	cfg := c.App.GetConfig()
-
-	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-	w.Write([]byte(cfg.ToJson()))
-}
-
-func configReload(c *Context, w http.ResponseWriter, r *http.Request) {
-	if !c.App.SessionHasPermissionTo(c.App.Session, model.PERMISSION_MANAGE_SYSTEM) {
-		c.SetPermissionError(model.PERMISSION_MANAGE_SYSTEM)
-		return
-	}
-
-	c.App.ReloadConfig()
-
-	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-	ReturnStatusOK(w)
-}
-
-func updateConfig(c *Context, w http.ResponseWriter, r *http.Request) {
-	cfg := model.ConfigFromJson(r.Body)
-	if cfg == nil {
-		c.SetInvalidParam("config")
-		return
-	}
-
-	if !c.App.SessionHasPermissionTo(c.App.Session, model.PERMISSION_MANAGE_SYSTEM) {
-		c.SetPermissionError(model.PERMISSION_MANAGE_SYSTEM)
-		return
-	}
-
-	// Do not allow plugin uploads to be toggled through the API
-	cfg.PluginSettings.EnableUploads = c.App.GetConfig().PluginSettings.EnableUploads
-
-	// If the Message Export feature has been toggled in the System Console, rewrite the ExportFromTimestamp field to an
-	// appropriate value. The rewriting occurs here to ensure it doesn't affect values written to the config file
-	// directly and not through the System Console UI.
-	if *cfg.MessageExportSettings.EnableExport != *c.App.GetConfig().MessageExportSettings.EnableExport {
-		if *cfg.MessageExportSettings.EnableExport && *cfg.MessageExportSettings.ExportFromTimestamp == int64(0) {
-			// When the feature is toggled on, use the current timestamp as the start time for future exports.
-			cfg.MessageExportSettings.ExportFromTimestamp = model.NewInt64(model.GetMillis())
-		} else if !*cfg.MessageExportSettings.EnableExport {
-			// When the feature is disabled, reset the timestamp so that the timestamp will be set if
-			// the feature is re-enabled from the System Console in future.
-			cfg.MessageExportSettings.ExportFromTimestamp = model.NewInt64(0)
-		}
-	}
-
-	err := c.App.SaveConfig(cfg, true)
-	if err != nil {
-		c.Err = err
-		return
-	}
-
-	c.LogAudit("updateConfig")
-
-	cfg = c.App.GetConfig()
-
-	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-	w.Write([]byte(cfg.ToJson()))
 }
 
 func getAudits(c *Context, w http.ResponseWriter, r *http.Request) {
@@ -175,9 +107,13 @@ func getAudits(c *Context, w http.ResponseWriter, r *http.Request) {
 }
 
 func databaseRecycle(c *Context, w http.ResponseWriter, r *http.Request) {
-
 	if !c.App.SessionHasPermissionTo(c.App.Session, model.PERMISSION_MANAGE_SYSTEM) {
 		c.SetPermissionError(model.PERMISSION_MANAGE_SYSTEM)
+		return
+	}
+
+	if *c.App.Config().ExperimentalSettings.RestrictSystemAdmin {
+		c.Err = model.NewAppError("databaseRecycle", "api.restricted_system_admin", nil, "", http.StatusForbidden)
 		return
 	}
 
@@ -189,6 +125,11 @@ func databaseRecycle(c *Context, w http.ResponseWriter, r *http.Request) {
 func invalidateCaches(c *Context, w http.ResponseWriter, r *http.Request) {
 	if !c.App.SessionHasPermissionTo(c.App.Session, model.PERMISSION_MANAGE_SYSTEM) {
 		c.SetPermissionError(model.PERMISSION_MANAGE_SYSTEM)
+		return
+	}
+
+	if *c.App.Config().ExperimentalSettings.RestrictSystemAdmin {
+		c.Err = model.NewAppError("invalidateCaches", "api.restricted_system_admin", nil, "", http.StatusForbidden)
 		return
 	}
 
@@ -253,144 +194,6 @@ func postLog(c *Context, w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(model.MapToJson(m)))
 }
 
-func getClientConfig(c *Context, w http.ResponseWriter, r *http.Request) {
-	format := r.URL.Query().Get("format")
-
-	if format == "" {
-		c.Err = model.NewAppError("getClientConfig", "api.config.client.old_format.app_error", nil, "", http.StatusNotImplemented)
-		return
-	}
-
-	if format != "old" {
-		c.SetInvalidParam("format")
-		return
-	}
-
-	var config map[string]string
-	if len(c.App.Session.UserId) == 0 {
-		config = c.App.LimitedClientConfigWithComputed()
-	} else {
-		config = c.App.ClientConfigWithComputed()
-	}
-
-	w.Write([]byte(model.MapToJson(config)))
-}
-
-func getEnvironmentConfig(c *Context, w http.ResponseWriter, r *http.Request) {
-	if !c.App.SessionHasPermissionTo(c.App.Session, model.PERMISSION_MANAGE_SYSTEM) {
-		c.SetPermissionError(model.PERMISSION_MANAGE_SYSTEM)
-		return
-	}
-
-	envConfig := c.App.GetEnvironmentConfig()
-
-	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-	w.Write([]byte(model.StringInterfaceToJson(envConfig)))
-}
-
-func getClientLicense(c *Context, w http.ResponseWriter, r *http.Request) {
-	format := r.URL.Query().Get("format")
-
-	if format == "" {
-		c.Err = model.NewAppError("getClientLicense", "api.license.client.old_format.app_error", nil, "", http.StatusNotImplemented)
-		return
-	}
-
-	if format != "old" {
-		c.SetInvalidParam("format")
-		return
-	}
-
-	etag := c.App.GetClientLicenseEtag(true)
-	if c.HandleEtag(etag, "Get Client License", w, r) {
-		return
-	}
-
-	var clientLicense map[string]string
-
-	if c.App.SessionHasPermissionTo(c.App.Session, model.PERMISSION_MANAGE_SYSTEM) {
-		clientLicense = c.App.ClientLicense()
-	} else {
-		clientLicense = c.App.GetSanitizedClientLicense()
-	}
-
-	w.Header().Set(model.HEADER_ETAG_SERVER, etag)
-	w.Write([]byte(model.MapToJson(clientLicense)))
-}
-
-func addLicense(c *Context, w http.ResponseWriter, r *http.Request) {
-	c.LogAudit("attempt")
-
-	if !c.App.SessionHasPermissionTo(c.App.Session, model.PERMISSION_MANAGE_SYSTEM) {
-		c.SetPermissionError(model.PERMISSION_MANAGE_SYSTEM)
-		return
-	}
-
-	err := r.ParseMultipartForm(*c.App.Config().FileSettings.MaxFileSize)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	m := r.MultipartForm
-
-	fileArray, ok := m.File["license"]
-	if !ok {
-		c.Err = model.NewAppError("addLicense", "api.license.add_license.no_file.app_error", nil, "", http.StatusBadRequest)
-		return
-	}
-
-	if len(fileArray) <= 0 {
-		c.Err = model.NewAppError("addLicense", "api.license.add_license.array.app_error", nil, "", http.StatusBadRequest)
-		return
-	}
-
-	fileData := fileArray[0]
-
-	file, err := fileData.Open()
-	if err != nil {
-		c.Err = model.NewAppError("addLicense", "api.license.add_license.open.app_error", nil, err.Error(), http.StatusBadRequest)
-		return
-	}
-	defer file.Close()
-
-	buf := bytes.NewBuffer(nil)
-	io.Copy(buf, file)
-
-	license, appErr := c.App.SaveLicense(buf.Bytes())
-	if appErr != nil {
-		if appErr.Id == model.EXPIRED_LICENSE_ERROR {
-			c.LogAudit("failed - expired or non-started license")
-		} else if appErr.Id == model.INVALID_LICENSE_ERROR {
-			c.LogAudit("failed - invalid license")
-		} else {
-			c.LogAudit("failed - unable to save license")
-		}
-		c.Err = appErr
-		return
-	}
-
-	c.LogAudit("success")
-	w.Write([]byte(license.ToJson()))
-}
-
-func removeLicense(c *Context, w http.ResponseWriter, r *http.Request) {
-	c.LogAudit("attempt")
-
-	if !c.App.SessionHasPermissionTo(c.App.Session, model.PERMISSION_MANAGE_SYSTEM) {
-		c.SetPermissionError(model.PERMISSION_MANAGE_SYSTEM)
-		return
-	}
-
-	if err := c.App.RemoveLicense(); err != nil {
-		c.Err = err
-		return
-	}
-
-	c.LogAudit("success")
-	ReturnStatusOK(w)
-}
-
 func getAnalytics(c *Context, w http.ResponseWriter, r *http.Request) {
 	name := r.URL.Query().Get("name")
 	teamId := r.URL.Query().Get("team_id")
@@ -419,15 +222,18 @@ func getAnalytics(c *Context, w http.ResponseWriter, r *http.Request) {
 }
 
 func getSupportedTimezones(c *Context, w http.ResponseWriter, r *http.Request) {
-	supportedTimezones := c.App.Timezones()
-
-	if supportedTimezones != nil {
-		w.Write([]byte(model.TimezonesToJson(supportedTimezones)))
-		return
+	supportedTimezones := c.App.Timezones.GetSupported()
+	if supportedTimezones == nil {
+		supportedTimezones = make([]string, 0)
 	}
 
-	emptyTimezones := make([]string, 0)
-	w.Write([]byte(model.TimezonesToJson(emptyTimezones)))
+	b, err := json.Marshal(supportedTimezones)
+	if err != nil {
+		c.Log.Warn("Unable to marshal JSON in timezones.", mlog.Err(err))
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+
+	w.Write(b)
 }
 
 func testS3(c *Context, w http.ResponseWriter, r *http.Request) {
@@ -441,13 +247,18 @@ func testS3(c *Context, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if *c.App.Config().ExperimentalSettings.RestrictSystemAdmin {
+		c.Err = model.NewAppError("testS3", "api.restricted_system_admin", nil, "", http.StatusForbidden)
+		return
+	}
+
 	err := filesstore.CheckMandatoryS3Fields(&cfg.FileSettings)
 	if err != nil {
 		c.Err = err
 		return
 	}
 
-	if cfg.FileSettings.AmazonS3SecretAccessKey == model.FAKE_SETTING {
+	if *cfg.FileSettings.AmazonS3SecretAccessKey == model.FAKE_SETTING {
 		cfg.FileSettings.AmazonS3SecretAccessKey = c.App.Config().FileSettings.AmazonS3SecretAccessKey
 	}
 
@@ -467,32 +278,41 @@ func testS3(c *Context, w http.ResponseWriter, r *http.Request) {
 func getRedirectLocation(c *Context, w http.ResponseWriter, r *http.Request) {
 	m := make(map[string]string)
 	m["location"] = ""
-	cfg := c.App.GetConfig()
-	if !*cfg.ServiceSettings.EnableLinkPreviews {
+
+	if !*c.App.Config().ServiceSettings.EnableLinkPreviews {
 		w.Write([]byte(model.MapToJson(m)))
 		return
 	}
+
 	url := r.URL.Query().Get("url")
 	if len(url) == 0 {
 		c.SetInvalidParam("url")
 		return
 	}
 
-	client := &http.Client{
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
-	}
-
-	res, err := client.Head(url)
-	if err != nil {
-		// Always return a success status and a JSON string to limit the amount of information returned to a
-		// hacker attempting to use Mattermost to probe a private network.
+	if location, ok := redirectLocationDataCache.Get(url); ok {
+		m["location"] = location.(string)
 		w.Write([]byte(model.MapToJson(m)))
 		return
 	}
 
-	m["location"] = res.Header.Get("Location")
+	client := c.App.HTTPService.MakeClient(false)
+	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+
+	res, err := client.Head(url)
+	if err != nil {
+		// Cache failures to prevent retries.
+		redirectLocationDataCache.AddWithExpiresInSecs(url, "", 3600) // Expires after 1 hour
+		// Always return a success status and a JSON string to limit information returned to client.
+		w.Write([]byte(model.MapToJson(m)))
+		return
+	}
+
+	location := res.Header.Get("Location")
+	redirectLocationDataCache.AddWithExpiresInSecs(url, location, 3600) // Expires after 1 hour
+	m["location"] = location
 
 	w.Write([]byte(model.MapToJson(m)))
 	return

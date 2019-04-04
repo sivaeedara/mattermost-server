@@ -122,6 +122,12 @@ type PostForExport struct {
 	ReplyCount  int
 }
 
+type DirectPostForExport struct {
+	Post
+	User           string
+	ChannelMembers *[]string
+}
+
 type ReplyForExport struct {
 	Post
 	Username string
@@ -291,6 +297,9 @@ func (o *Post) PreCommit() {
 	}
 
 	o.GenerateActionIds()
+
+	// There's a rare bug where the client sends up duplicate FileIds so protect against that
+	o.FileIds = RemoveDuplicateStrings(o.FileIds)
 }
 
 func (o *Post) MakeNonNil() {

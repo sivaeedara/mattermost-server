@@ -125,6 +125,11 @@ func (c *Context) MfaRequired() {
 			return
 		}
 
+		// Bots are exempt
+		if user.IsBot {
+			return
+		}
+
 		if !user.MfaActive {
 			c.Err = model.NewAppError("", "api.context.mfa_required.app_error", nil, "MfaRequired", http.StatusForbidden)
 			return
@@ -182,7 +187,7 @@ func NewInvalidUrlParamError(parameter string) *model.AppError {
 }
 
 func (c *Context) SetPermissionError(permission *model.Permission) {
-	c.Err = model.NewAppError("Permissions", "api.context.permissions.app_error", nil, "userId="+c.App.Session.UserId+", "+"permission="+permission.Id, http.StatusForbidden)
+	c.Err = c.App.MakePermissionError(permission)
 }
 
 func (c *Context) SetSiteURLHeader(url string) {
@@ -517,5 +522,60 @@ func (c *Context) RequireRoleName() *Context {
 		c.SetInvalidUrlParam("role_name")
 	}
 
+	return c
+}
+
+func (c *Context) RequireGroupId() *Context {
+	if c.Err != nil {
+		return c
+	}
+
+	if len(c.Params.GroupId) != 26 {
+		c.SetInvalidUrlParam("group_id")
+	}
+	return c
+}
+
+func (c *Context) RequireRemoteId() *Context {
+	if c.Err != nil {
+		return c
+	}
+
+	if len(c.Params.RemoteId) == 0 {
+		c.SetInvalidUrlParam("remote_id")
+	}
+	return c
+}
+
+func (c *Context) RequireSyncableId() *Context {
+	if c.Err != nil {
+		return c
+	}
+
+	if len(c.Params.SyncableId) != 26 {
+		c.SetInvalidUrlParam("syncable_id")
+	}
+	return c
+}
+
+func (c *Context) RequireSyncableType() *Context {
+	if c.Err != nil {
+		return c
+	}
+
+	if c.Params.SyncableType != model.GroupSyncableTypeTeam && c.Params.SyncableType != model.GroupSyncableTypeChannel {
+		c.SetInvalidUrlParam("syncable_type")
+	}
+	return c
+}
+
+func (c *Context) RequireBotUserId() *Context {
+	if c.Err != nil {
+		return c
+	}
+
+	if len(c.Params.BotUserId) != 26 {
+		c.SetInvalidUrlParam("bot_user_id")
+	}
 	return c
 }

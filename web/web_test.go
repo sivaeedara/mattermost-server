@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/mattermost/mattermost-server/app"
+	"github.com/mattermost/mattermost-server/config"
 	"github.com/mattermost/mattermost-server/model"
 )
 
@@ -26,16 +27,26 @@ type TestHelper struct {
 }
 
 func Setup() *TestHelper {
-	mainHelper.Store.DropAllTables()
+	store := mainHelper.GetStore()
+	store.DropAllTables()
 
-	s, err := app.NewServer(app.StoreOverride(mainHelper.Store), app.DisableConfigWatch)
+	memoryStore, err := config.NewMemoryStore()
+	if err != nil {
+		panic("failed to initialize memory store: " + err.Error())
+	}
+
+	var options []app.Option
+	options = append(options, app.ConfigStore(memoryStore))
+	options = append(options, app.StoreOverride(mainHelper.Store))
+
+	s, err := app.NewServer(options...)
 	if err != nil {
 		panic(err)
 	}
 	a := s.FakeApp()
 	prevListenAddress := *a.Config().ServiceSettings.ListenAddress
 	a.UpdateConfig(func(cfg *model.Config) { *cfg.ServiceSettings.ListenAddress = ":0" })
-	serverErr := a.StartServer()
+	serverErr := s.Start()
 	if serverErr != nil {
 		panic(serverErr)
 	}

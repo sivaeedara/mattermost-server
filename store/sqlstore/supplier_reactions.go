@@ -34,18 +34,16 @@ func (s *SqlSupplier) ReactionSave(ctx context.Context, reaction *model.Reaction
 	if transaction, err := s.GetMaster().Begin(); err != nil {
 		result.Err = model.NewAppError("SqlReactionStore.Save", "store.sql_reaction.save.begin.app_error", nil, err.Error(), http.StatusInternalServerError)
 	} else {
+		defer finalizeTransaction(transaction)
 		err := saveReactionAndUpdatePost(transaction, reaction)
 
 		if err != nil {
-			transaction.Rollback()
-
 			// We don't consider duplicated save calls as an error
 			if !IsUniqueConstraintError(err, []string{"reactions_pkey", "PRIMARY"}) {
 				result.Err = model.NewAppError("SqlPreferenceStore.Save", "store.sql_reaction.save.save.app_error", nil, err.Error(), http.StatusBadRequest)
 			}
 		} else {
 			if err := transaction.Commit(); err != nil {
-				// don't need to rollback here since the transaction is already closed
 				result.Err = model.NewAppError("SqlPreferenceStore.Save", "store.sql_reaction.save.commit.app_error", nil, err.Error(), http.StatusInternalServerError)
 			}
 		}
@@ -64,14 +62,12 @@ func (s *SqlSupplier) ReactionDelete(ctx context.Context, reaction *model.Reacti
 	if transaction, err := s.GetMaster().Begin(); err != nil {
 		result.Err = model.NewAppError("SqlReactionStore.Delete", "store.sql_reaction.delete.begin.app_error", nil, err.Error(), http.StatusInternalServerError)
 	} else {
+		defer finalizeTransaction(transaction)
 		err := deleteReactionAndUpdatePost(transaction, reaction)
 
 		if err != nil {
-			transaction.Rollback()
-
 			result.Err = model.NewAppError("SqlPreferenceStore.Delete", "store.sql_reaction.delete.app_error", nil, err.Error(), http.StatusInternalServerError)
 		} else if err := transaction.Commit(); err != nil {
-			// don't need to rollback here since the transaction is already closed
 			result.Err = model.NewAppError("SqlPreferenceStore.Delete", "store.sql_reaction.delete.commit.app_error", nil, err.Error(), http.StatusInternalServerError)
 		} else {
 			result.Data = reaction
@@ -96,6 +92,28 @@ func (s *SqlSupplier) ReactionGetForPost(ctx context.Context, postId string, hin
 			ORDER BY
 				CreateAt`, map[string]interface{}{"PostId": postId}); err != nil {
 		result.Err = model.NewAppError("SqlReactionStore.GetForPost", "store.sql_reaction.get_for_post.app_error", nil, "", http.StatusInternalServerError)
+	} else {
+		result.Data = reactions
+	}
+
+	return result
+}
+
+func (s *SqlSupplier) ReactionsBulkGetForPosts(ctx context.Context, postIds []string, hints ...store.LayeredStoreHint) *store.LayeredStoreSupplierResult {
+	result := store.NewSupplierResult()
+
+	keys, params := MapStringsToQueryParams(postIds, "postId")
+	var reactions []*model.Reaction
+
+	if _, err := s.GetReplica().Select(&reactions, `SELECT
+				*
+			FROM
+				Reactions
+			WHERE
+				PostId IN `+keys+`
+			ORDER BY
+				CreateAt`, params); err != nil {
+		result.Err = model.NewAppError("SqlReactionStore.GetForPost", "store.sql_reaction.bulk_get_for_post_ids.app_error", nil, "", http.StatusInternalServerError)
 	} else {
 		result.Data = reactions
 	}

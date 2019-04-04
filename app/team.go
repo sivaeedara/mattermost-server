@@ -67,7 +67,7 @@ func (a *App) normalizeDomains(domains string) []string {
 func (a *App) isTeamEmailAddressAllowed(email string, allowedDomains string) bool {
 	email = strings.ToLower(email)
 	// First check per team allowedDomains, then app wide restrictions
-	for _, restriction := range []string{allowedDomains, a.Config().TeamSettings.RestrictCreationToDomains} {
+	for _, restriction := range []string{allowedDomains, *a.Config().TeamSettings.RestrictCreationToDomains} {
 		domains := a.normalizeDomains(restriction)
 		if len(domains) <= 0 {
 			continue
@@ -89,11 +89,6 @@ func (a *App) isTeamEmailAddressAllowed(email string, allowedDomains string) boo
 
 func (a *App) isTeamEmailAllowed(user *model.User, team *model.Team) bool {
 	email := strings.ToLower(user.Email)
-
-	if len(user.AuthService) > 0 && len(*user.AuthData) > 0 {
-		return true
-	}
-
 	return a.isTeamEmailAddressAllowed(email, team.AllowedDomains)
 }
 
@@ -103,7 +98,7 @@ func (a *App) UpdateTeam(team *model.Team) (*model.Team, *model.AppError) {
 		return nil, err
 	}
 
-	validDomains := a.normalizeDomains(a.Config().TeamSettings.RestrictCreationToDomains)
+	validDomains := a.normalizeDomains(*a.Config().TeamSettings.RestrictCreationToDomains)
 	if len(validDomains) > 0 {
 		for _, domain := range a.normalizeDomains(team.AllowedDomains) {
 			matched := false
@@ -127,6 +122,7 @@ func (a *App) UpdateTeam(team *model.Team) (*model.Team, *model.AppError) {
 	oldTeam.CompanyName = team.CompanyName
 	oldTeam.AllowedDomains = team.AllowedDomains
 	oldTeam.LastTeamIconUpdate = team.LastTeamIconUpdate
+	oldTeam.GroupConstrained = team.GroupConstrained
 
 	oldTeam, err = a.updateTeamUnsanitized(oldTeam)
 	if err != nil {
@@ -145,6 +141,34 @@ func (a *App) updateTeamUnsanitized(team *model.Team) (*model.Team, *model.AppEr
 	}
 
 	return result.Data.(*model.Team), nil
+}
+
+// RenameTeam is used to rename the team Name and the DisplayName fields
+func (a *App) RenameTeam(team *model.Team, newTeamName string, newDisplayName string) (*model.Team, *model.AppError) {
+
+	// check if name is occupied
+	_, errnf := a.GetTeamByName(newTeamName)
+
+	// "-" can be used as a newTeamName if only DisplayName change is wanted
+	if errnf == nil && newTeamName != "-" {
+		errbody := fmt.Sprintf("team with name %s already exists", newTeamName)
+		return nil, model.NewAppError("RenameTeam", "app.team.rename_team.name_occupied", nil, errbody, http.StatusBadRequest)
+	}
+
+	if newTeamName != "-" {
+		team.Name = newTeamName
+	}
+
+	if newDisplayName != "" {
+		team.DisplayName = newDisplayName
+	}
+
+	newTeam, err := a.updateTeamUnsanitized(team)
+	if err != nil {
+		return nil, err
+	}
+
+	return newTeam, nil
 }
 
 func (a *App) UpdateTeamScheme(team *model.Team) (*model.Team, *model.AppError) {
@@ -539,8 +563,32 @@ func (a *App) GetAllTeamsPage(offset int, limit int) ([]*model.Team, *model.AppE
 	return result.Data.([]*model.Team), nil
 }
 
-func (a *App) GetAllOpenTeams() ([]*model.Team, *model.AppError) {
+func (a *App) GetAllPrivateTeams() ([]*model.Team, *model.AppError) {
+	result := <-a.Srv.Store.Team().GetAllPrivateTeamListing()
+	if result.Err != nil {
+		return nil, result.Err
+	}
+	return result.Data.([]*model.Team), nil
+}
+
+func (a *App) GetAllPrivateTeamsPage(offset int, limit int) ([]*model.Team, *model.AppError) {
+	result := <-a.Srv.Store.Team().GetAllPrivateTeamPageListing(offset, limit)
+	if result.Err != nil {
+		return nil, result.Err
+	}
+	return result.Data.([]*model.Team), nil
+}
+
+func (a *App) GetAllPublicTeams() ([]*model.Team, *model.AppError) {
 	result := <-a.Srv.Store.Team().GetAllTeamListing()
+	if result.Err != nil {
+		return nil, result.Err
+	}
+	return result.Data.([]*model.Team), nil
+}
+
+func (a *App) GetAllPublicTeamsPage(offset int, limit int) ([]*model.Team, *model.AppError) {
+	result := <-a.Srv.Store.Team().GetAllTeamPageListing(offset, limit)
 	if result.Err != nil {
 		return nil, result.Err
 	}
@@ -555,7 +603,7 @@ func (a *App) SearchAllTeams(term string) ([]*model.Team, *model.AppError) {
 	return result.Data.([]*model.Team), nil
 }
 
-func (a *App) SearchOpenTeams(term string) ([]*model.Team, *model.AppError) {
+func (a *App) SearchPublicTeams(term string) ([]*model.Team, *model.AppError) {
 	result := <-a.Srv.Store.Team().SearchOpen(term)
 	if result.Err != nil {
 		return nil, result.Err
@@ -563,8 +611,8 @@ func (a *App) SearchOpenTeams(term string) ([]*model.Team, *model.AppError) {
 	return result.Data.([]*model.Team), nil
 }
 
-func (a *App) GetAllOpenTeamsPage(offset int, limit int) ([]*model.Team, *model.AppError) {
-	result := <-a.Srv.Store.Team().GetAllTeamPageListing(offset, limit)
+func (a *App) SearchPrivateTeams(term string) ([]*model.Team, *model.AppError) {
+	result := <-a.Srv.Store.Team().SearchPrivate(term)
 	if result.Err != nil {
 		return nil, result.Err
 	}
@@ -589,6 +637,14 @@ func (a *App) GetTeamMember(teamId, userId string) (*model.TeamMember, *model.Ap
 
 func (a *App) GetTeamMembersForUser(userId string) ([]*model.TeamMember, *model.AppError) {
 	result := <-a.Srv.Store.Team().GetTeamsForUser(userId)
+	if result.Err != nil {
+		return nil, result.Err
+	}
+	return result.Data.([]*model.TeamMember), nil
+}
+
+func (a *App) GetTeamMembersForUserWithPagination(userId string, page, perPage int) ([]*model.TeamMember, *model.AppError) {
+	result := <-a.Srv.Store.Team().GetTeamsForUserWithPagination(userId, page, perPage)
 	if result.Err != nil {
 		return nil, result.Err
 	}
@@ -799,6 +855,15 @@ func (a *App) LeaveTeam(team *model.Team, user *model.User, requestorId string) 
 		})
 	}
 
+	esInterface := a.Elasticsearch
+	if esInterface != nil && *a.Config().ElasticsearchSettings.EnableIndexing {
+		a.Srv.Go(func() {
+			if err := a.indexUser(user); err != nil {
+				mlog.Error("Encountered error indexing user", mlog.String("user_id", user.Id), mlog.Err(err))
+			}
+		})
+	}
+
 	if uua := <-a.Srv.Store.User().UpdateUpdateAt(user.Id); uua.Err != nil {
 		return uua.Err
 	}
@@ -1000,6 +1065,20 @@ func (a *App) SoftDeleteTeam(teamId string) *model.AppError {
 	return nil
 }
 
+func (a *App) RestoreTeam(teamId string) *model.AppError {
+	team, err := a.GetTeam(teamId)
+	if err != nil {
+		return err
+	}
+	team.DeleteAt = 0
+	result := <-a.Srv.Store.Team().Update(team)
+	if result.Err != nil {
+		return result.Err
+	}
+	a.sendTeamEvent(team, model.WEBSOCKET_EVENT_RESTORE_TEAM)
+	return nil
+}
+
 func (a *App) GetTeamStats(teamId string) (*model.TeamStats, *model.AppError) {
 	tchan := a.Srv.Store.Team().GetTotalMemberCount(teamId)
 	achan := a.Srv.Store.Team().GetActiveMemberCount(teamId)
@@ -1176,5 +1255,12 @@ func (a *App) RemoveTeamIcon(teamId string) *model.AppError {
 
 	a.sendTeamEvent(team, model.WEBSOCKET_EVENT_UPDATE_TEAM)
 
+	return nil
+}
+
+func (a *App) InvalidateAllEmailInvites() *model.AppError {
+	if result := <-a.Srv.Store.Token().RemoveAllTokensByType(TOKEN_TYPE_TEAM_INVITATION); result.Err != nil {
+		return model.NewAppError("InvalidateAllEmailInvites", "api.team.invalidate_all_email_invites.app_error", nil, result.Err.Error(), http.StatusBadRequest)
+	}
 	return nil
 }
