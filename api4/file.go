@@ -48,11 +48,11 @@ var MEDIA_CONTENT_TYPES = [...]string{
 }
 
 func (api *API) InitFile() {
-	fmt.Println("Starting mattermost customed version 2 - Disable authentication for File Preview and Download")
+	fmt.Println("Starting mattermost customed version 3 - Disable authentication for File Preview and Download")
 
 	api.BaseRoutes.Files.Handle("", api.ApiSessionRequired(uploadFile)).Methods("POST")
 	api.BaseRoutes.Files.Handle("/channel/{channel_id:[A-Za-z0-9]+}", api.ApiSessionRequired(getFilesByChannelId)).Methods("GET")
-	api.BaseRoutes.File.Handle("", api.ApiHandlerTrustRequester(getFile)).Methods("GET")
+	api.BaseRoutes.File.Handle("", api.ApiSessionRequiredTrustRequester(getFile)).Methods("GET")
 	api.BaseRoutes.File.Handle("/thumbnail", api.ApiHandlerTrustRequester(getFileThumbnail)).Methods("GET")
 	api.BaseRoutes.File.Handle("/link", api.ApiSessionRequired(getFileLink)).Methods("GET")
 	api.BaseRoutes.File.Handle("/preview", api.ApiHandlerTrustRequester(getFilePreview)).Methods("GET")
@@ -79,8 +79,8 @@ func getFilesByChannelId(c *Context, w http.ResponseWriter, r *http.Request) {
 		c.Err = err
 		return
 	}
-	w.Header().Set("Cache-Control", "max-age=2592000, public")
-	w.Header().Set(model.HEADER_ETAG_SERVER, model.GetEtagForFileInfos(infos))
+	//w.Header().Set("Cache-Control", "max-age=2592000, public")
+	//w.Header().Set(model.HEADER_ETAG_SERVER, model.GetEtagForFileInfos(infos))
 	w.Write([]byte(model.FileInfosToJson(infos)))
 }
 
@@ -186,10 +186,10 @@ func getFile(c *Context, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// if info.CreatorId != c.App.Session.UserId && !c.App.SessionHasPermissionToChannelByPost(c.App.Session, info.PostId, model.PERMISSION_READ_CHANNEL) {
-	// 	c.SetPermissionError(model.PERMISSION_READ_CHANNEL)
-	// 	return
-	// }
+	if info.CreatorId != c.App.Session.UserId && !c.App.SessionHasPermissionToChannelByPost(c.App.Session, info.PostId, model.PERMISSION_READ_CHANNEL) {
+		c.SetPermissionError(model.PERMISSION_READ_CHANNEL)
+		return
+	}
 
 	fileReader, err := c.App.FileReader(info.Path)
 	if err != nil {
