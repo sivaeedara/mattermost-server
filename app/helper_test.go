@@ -36,7 +36,7 @@ func setupTestHelper(enterprise bool, tb testing.TB) *TestHelper {
 	store := mainHelper.GetStore()
 	store.DropAllTables()
 
-	memoryStore, err := config.NewMemoryStore()
+	memoryStore, err := config.NewMemoryStoreWithOptions(&config.MemoryStoreOptions{IgnoreEnvironmentOverrides: true})
 	if err != nil {
 		panic("failed to initialize memory store: " + err.Error())
 	}
@@ -281,6 +281,26 @@ func (me *TestHelper) CreatePost(channel *model.Channel) *model.Post {
 		UserId:    me.BasicUser.Id,
 		ChannelId: channel.Id,
 		Message:   "message_" + id,
+		CreateAt:  model.GetMillis() - 10000,
+	}
+
+	utils.DisableDebugLogForTest()
+	var err *model.AppError
+	if post, err = me.App.CreatePost(post, channel, false); err != nil {
+		mlog.Error(err.Error())
+
+		time.Sleep(time.Second)
+		panic(err)
+	}
+	utils.EnableDebugLogForTest()
+	return post
+}
+
+func (me *TestHelper) CreateMessagePost(channel *model.Channel, message string) *model.Post {
+	post := &model.Post{
+		UserId:    me.BasicUser.Id,
+		ChannelId: channel.Id,
+		Message:   message,
 		CreateAt:  model.GetMillis() - 10000,
 	}
 

@@ -73,12 +73,7 @@ func (a *App) sendNotificationEmail(notification *postNotification, user *model.
 		useMilitaryTime = data.Value == "true"
 	}
 
-	var nameFormat string
-	if data, err := a.Srv.Store.Preference().Get(user.Id, model.PREFERENCE_CATEGORY_DISPLAY_SETTINGS, model.PREFERENCE_NAME_NAME_FORMAT); err != nil {
-		nameFormat = *a.Config().TeamSettings.TeammateNameDisplay
-	} else {
-		nameFormat = data.Value
-	}
+	nameFormat := a.GetNotificationNameFormat(user)
 
 	channelName := notification.GetChannelName(nameFormat, "")
 	senderName := notification.GetSenderName(nameFormat, *a.Config().ServiceSettings.EnablePostUsernameOverride)
@@ -289,7 +284,7 @@ func (a *App) GetMessageForNotification(post *model.Post, translateFunc i18n.Tra
 	}
 
 	// extract the filenames from their paths and determine what type of files are attached
-	infos, err := a.Srv.Store.FileInfo().GetForPost(post.Id, true, true)
+	infos, err := a.Srv.Store.FileInfo().GetForPost(post.Id, true, false, true)
 	if err != nil {
 		mlog.Warn(fmt.Sprintf("Encountered error when getting files for notification message, post_id=%v, err=%v", post.Id, err), mlog.String("post_id", post.Id))
 	}

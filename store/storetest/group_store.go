@@ -49,6 +49,8 @@ func TestGroupStore(t *testing.T, ss store.Store) {
 
 	t.Run("TeamMembersMinusGroupMembers", func(t *testing.T) { testTeamMembersMinusGroupMembers(t, ss) })
 	t.Run("ChannelMembersMinusGroupMembers", func(t *testing.T) { testChannelMembersMinusGroupMembers(t, ss) })
+
+	t.Run("GetMemberCount", func(t *testing.T) { groupTestGetMemberCount(t, ss) })
 }
 
 func testGroupStoreCreate(t *testing.T, ss store.Store) {
@@ -510,19 +512,30 @@ func testGroupGetMemberUsersPage(t *testing.T, ss store.Store) {
 	_, err = ss.Group().UpsertMember(group.Id, user2.Id)
 	require.Nil(t, err)
 
+	u3 := &model.User{
+		Email:    MakeEmail(),
+		Username: model.NewId(),
+	}
+	user3, err := ss.User().Save(u3)
+	require.Nil(t, err)
+
+	_, err = ss.Group().UpsertMember(group.Id, user3.Id)
+	require.Nil(t, err)
+
 	// Check returns members
 	groupMembers, err := ss.Group().GetMemberUsersPage(group.Id, 0, 100)
 	require.Nil(t, err)
-	require.Equal(t, 2, len(groupMembers))
+	require.Equal(t, 3, len(groupMembers))
 
 	// Check page 1
-	groupMembers, err = ss.Group().GetMemberUsersPage(group.Id, 0, 1)
+	groupMembers, err = ss.Group().GetMemberUsersPage(group.Id, 0, 2)
 	require.Nil(t, err)
-	require.Equal(t, 1, len(groupMembers))
-	require.Equal(t, user2.Id, groupMembers[0].Id)
+	require.Equal(t, 2, len(groupMembers))
+	require.Equal(t, user3.Id, groupMembers[0].Id)
+	require.Equal(t, user2.Id, groupMembers[1].Id)
 
 	// Check page 2
-	groupMembers, err = ss.Group().GetMemberUsersPage(group.Id, 1, 1)
+	groupMembers, err = ss.Group().GetMemberUsersPage(group.Id, 1, 2)
 	require.Nil(t, err)
 	require.Equal(t, 1, len(groupMembers))
 	require.Equal(t, user1.Id, groupMembers[0].Id)
@@ -539,7 +552,7 @@ func testGroupGetMemberUsersPage(t *testing.T, ss store.Store) {
 	// Should not return deleted members
 	groupMembers, err = ss.Group().GetMemberUsersPage(group.Id, 0, 100)
 	require.Nil(t, err)
-	require.Equal(t, 1, len(groupMembers))
+	require.Equal(t, 2, len(groupMembers))
 }
 
 func testUpsertMember(t *testing.T, ss store.Store) {
@@ -1619,7 +1632,21 @@ func testGetGroupsByChannel(t *testing.T, ss store.Store) {
 	user1, err := ss.User().Save(u1)
 	require.Nil(t, err)
 
+	u2 := &model.User{
+		Email:    MakeEmail(),
+		Username: model.NewId(),
+	}
+	user2, err := ss.User().Save(u2)
+	require.Nil(t, err)
+
 	_, err = ss.Group().UpsertMember(group1.Id, user1.Id)
+	require.Nil(t, err)
+
+	_, err = ss.Group().UpsertMember(group1.Id, user2.Id)
+	require.Nil(t, err)
+
+	user2.DeleteAt = 1
+	_, err = ss.User().Update(user2, true)
 	require.Nil(t, err)
 
 	group1WithMemberCount := model.Group(*group1)
@@ -1818,7 +1845,21 @@ func testGetGroupsByTeam(t *testing.T, ss store.Store) {
 	user1, err := ss.User().Save(u1)
 	require.Nil(t, err)
 
+	u2 := &model.User{
+		Email:    MakeEmail(),
+		Username: model.NewId(),
+	}
+	user2, err := ss.User().Save(u2)
+	require.Nil(t, err)
+
 	_, err = ss.Group().UpsertMember(group1.Id, user1.Id)
+	require.Nil(t, err)
+
+	_, err = ss.Group().UpsertMember(group1.Id, user2.Id)
+	require.Nil(t, err)
+
+	user2.DeleteAt = 1
+	_, err = ss.User().Update(user2, true)
 	require.Nil(t, err)
 
 	group1WithMemberCount := model.Group(*group1)
@@ -2058,14 +2099,21 @@ func testGetGroups(t *testing.T, ss store.Store) {
 	user1, err := ss.User().Save(u1)
 	require.Nil(t, err)
 
+	u2 := &model.User{
+		Email:    MakeEmail(),
+		Username: model.NewId(),
+	}
+	user2, err := ss.User().Save(u2)
+	require.Nil(t, err)
+
 	_, err = ss.Group().UpsertMember(group1.Id, user1.Id)
 	require.Nil(t, err)
 
-	group1WithMemberCount := model.Group(*group1)
-	group1WithMemberCount.MemberCount = model.NewInt(1)
+	_, err = ss.Group().UpsertMember(group1.Id, user2.Id)
+	require.Nil(t, err)
 
-	group2WithMemberCount := model.Group(*group2)
-	group2WithMemberCount.MemberCount = model.NewInt(0)
+	user2.DeleteAt = 1
+	ss.User().Update(user2, true)
 
 	group2NameSubstring := string([]rune(group2.Name)[2:5])
 
@@ -2150,10 +2198,13 @@ func testGetGroups(t *testing.T, ss store.Store) {
 			Name:    "Include member counts",
 			Opts:    model.GroupSearchOpts{IncludeMemberCount: true},
 			Page:    0,
-			PerPage: 2,
+			PerPage: 100,
 			Resultf: func(groups []*model.Group) bool {
 				for _, g := range groups {
 					if g.MemberCount == nil {
+						return false
+					}
+					if g.Id == group1.Id && *g.MemberCount != 1 {
 						return false
 					}
 				}
@@ -2229,7 +2280,7 @@ func testTeamMembersMinusGroupMembers(t *testing.T, ss store.Store) {
 	for i := 0; i < numberOfUsers; i++ {
 		user := &model.User{
 			Email:    MakeEmail(),
-			Username: model.NewId(),
+			Username: fmt.Sprintf("%d_%s", i, model.NewId()),
 		}
 		user, err = ss.User().Save(user)
 		require.Nil(t, err)
@@ -2239,6 +2290,17 @@ func testTeamMembersMinusGroupMembers(t *testing.T, ss store.Store) {
 		res := <-ss.Team().SaveMember(&model.TeamMember{TeamId: team.Id, UserId: user.Id, SchemeUser: trueOrFalse, SchemeAdmin: !trueOrFalse}, 999)
 		require.Nil(t, res.Err)
 	}
+
+	// Extra user outside of the group member users.
+	user := &model.User{
+		Email:    MakeEmail(),
+		Username: "99_" + model.NewId(),
+	}
+	user, err = ss.User().Save(user)
+	require.Nil(t, err)
+	users = append(users, user)
+	res := <-ss.Team().SaveMember(&model.TeamMember{TeamId: team.Id, UserId: user.Id, SchemeUser: true, SchemeAdmin: false}, 999)
+	require.Nil(t, res.Err)
 
 	for i := 0; i < numberOfGroups; i++ {
 		group := &model.Group{
@@ -2254,7 +2316,7 @@ func testTeamMembersMinusGroupMembers(t *testing.T, ss store.Store) {
 	}
 
 	sort.Slice(users, func(i, j int) bool {
-		return users[i].Id < users[j].Id
+		return users[i].Username < users[j].Username
 	})
 
 	// Add even users to even group, and the inverse
@@ -2278,43 +2340,43 @@ func testTeamMembersMinusGroupMembers(t *testing.T, ss store.Store) {
 		teardown           func()
 	}{
 		"No group IDs, all members": {
-			expectedUserIDs:    []string{users[0].Id, users[1].Id, users[2].Id, users[3].Id},
-			expectedTotalCount: numberOfUsers,
+			expectedUserIDs:    []string{users[0].Id, users[1].Id, users[2].Id, users[3].Id, user.Id},
+			expectedTotalCount: numberOfUsers + 1,
 			groupIDs:           []string{},
 			page:               0,
 			perPage:            100,
 		},
 		"All members, page 1": {
-			expectedUserIDs:    []string{users[0].Id, users[1].Id},
-			expectedTotalCount: numberOfUsers,
+			expectedUserIDs:    []string{users[0].Id, users[1].Id, users[2].Id},
+			expectedTotalCount: numberOfUsers + 1,
 			groupIDs:           []string{},
 			page:               0,
-			perPage:            2,
+			perPage:            3,
 		},
 		"All members, page 2": {
-			expectedUserIDs:    []string{users[2].Id, users[3].Id},
-			expectedTotalCount: numberOfUsers,
+			expectedUserIDs:    []string{users[3].Id, users[4].Id},
+			expectedTotalCount: numberOfUsers + 1,
 			groupIDs:           []string{},
 			page:               1,
-			perPage:            2,
+			perPage:            3,
 		},
 		"Group 1, even users would be removed": {
-			expectedUserIDs:    []string{users[0].Id, users[2].Id},
-			expectedTotalCount: 2,
+			expectedUserIDs:    []string{users[0].Id, users[2].Id, users[4].Id},
+			expectedTotalCount: 3,
 			groupIDs:           []string{groups[1].Id},
 			page:               0,
 			perPage:            100,
 		},
 		"Group 0, odd users would be removed": {
-			expectedUserIDs:    []string{users[1].Id, users[3].Id},
-			expectedTotalCount: 2,
+			expectedUserIDs:    []string{users[1].Id, users[3].Id, users[4].Id},
+			expectedTotalCount: 3,
 			groupIDs:           []string{groups[0].Id},
 			page:               0,
 			perPage:            100,
 		},
 		"All groups, no users would be removed": {
-			expectedUserIDs:    []string{},
-			expectedTotalCount: 0,
+			expectedUserIDs:    []string{users[4].Id},
+			expectedTotalCount: 1,
 			groupIDs:           []string{groups[0].Id, groups[1].Id},
 			page:               0,
 			perPage:            100,
@@ -2343,11 +2405,6 @@ func testTeamMembersMinusGroupMembers(t *testing.T, ss store.Store) {
 			require.Nil(t, err)
 			require.ElementsMatch(t, tc.expectedUserIDs, mapUserIDs(actual))
 
-			for _, user := range actual {
-				require.NotNil(t, user.GroupIDs)
-				require.True(t, (user.SchemeAdmin || user.SchemeUser))
-			}
-
 			actualCount, err := ss.Group().CountTeamMembersMinusGroupMembers(team.Id, tc.groupIDs)
 			require.Nil(t, err)
 			require.Equal(t, tc.expectedTotalCount, actualCount)
@@ -2375,7 +2432,7 @@ func testChannelMembersMinusGroupMembers(t *testing.T, ss store.Store) {
 	for i := 0; i < numberOfUsers; i++ {
 		user := &model.User{
 			Email:    MakeEmail(),
-			Username: model.NewId(),
+			Username: fmt.Sprintf("%d_%s", i, model.NewId()),
 		}
 		user, err = ss.User().Save(user)
 		require.Nil(t, err)
@@ -2392,6 +2449,22 @@ func testChannelMembersMinusGroupMembers(t *testing.T, ss store.Store) {
 		require.Nil(t, res.Err)
 	}
 
+	// Extra user outside of the group member users.
+	user, err := ss.User().Save(&model.User{
+		Email:    MakeEmail(),
+		Username: "99_" + model.NewId(),
+	})
+	require.Nil(t, err)
+	users = append(users, user)
+	res := <-ss.Channel().SaveMember(&model.ChannelMember{
+		ChannelId:   channel.Id,
+		UserId:      user.Id,
+		SchemeUser:  true,
+		SchemeAdmin: false,
+		NotifyProps: model.GetDefaultChannelNotifyProps(),
+	})
+	require.Nil(t, res.Err)
+
 	for i := 0; i < numberOfGroups; i++ {
 		group := &model.Group{
 			Name:        fmt.Sprintf("n_%d_%s", i, model.NewId()),
@@ -2406,7 +2479,7 @@ func testChannelMembersMinusGroupMembers(t *testing.T, ss store.Store) {
 	}
 
 	sort.Slice(users, func(i, j int) bool {
-		return users[i].Id < users[j].Id
+		return users[i].Username < users[j].Username
 	})
 
 	// Add even users to even group, and the inverse
@@ -2430,43 +2503,43 @@ func testChannelMembersMinusGroupMembers(t *testing.T, ss store.Store) {
 		teardown           func()
 	}{
 		"No group IDs, all members": {
-			expectedUserIDs:    []string{users[0].Id, users[1].Id, users[2].Id, users[3].Id},
-			expectedTotalCount: numberOfUsers,
+			expectedUserIDs:    []string{users[0].Id, users[1].Id, users[2].Id, users[3].Id, users[4].Id},
+			expectedTotalCount: numberOfUsers + 1,
 			groupIDs:           []string{},
 			page:               0,
 			perPage:            100,
 		},
 		"All members, page 1": {
-			expectedUserIDs:    []string{users[0].Id, users[1].Id},
-			expectedTotalCount: numberOfUsers,
+			expectedUserIDs:    []string{users[0].Id, users[1].Id, users[2].Id},
+			expectedTotalCount: numberOfUsers + 1,
 			groupIDs:           []string{},
 			page:               0,
-			perPage:            2,
+			perPage:            3,
 		},
 		"All members, page 2": {
-			expectedUserIDs:    []string{users[2].Id, users[3].Id},
-			expectedTotalCount: numberOfUsers,
+			expectedUserIDs:    []string{users[3].Id, users[4].Id},
+			expectedTotalCount: numberOfUsers + 1,
 			groupIDs:           []string{},
 			page:               1,
-			perPage:            2,
+			perPage:            3,
 		},
 		"Group 1, even users would be removed": {
-			expectedUserIDs:    []string{users[0].Id, users[2].Id},
-			expectedTotalCount: 2,
+			expectedUserIDs:    []string{users[0].Id, users[2].Id, users[4].Id},
+			expectedTotalCount: 3,
 			groupIDs:           []string{groups[1].Id},
 			page:               0,
 			perPage:            100,
 		},
 		"Group 0, odd users would be removed": {
-			expectedUserIDs:    []string{users[1].Id, users[3].Id},
-			expectedTotalCount: 2,
+			expectedUserIDs:    []string{users[1].Id, users[3].Id, users[4].Id},
+			expectedTotalCount: 3,
 			groupIDs:           []string{groups[0].Id},
 			page:               0,
 			perPage:            100,
 		},
 		"All groups, no users would be removed": {
-			expectedUserIDs:    []string{},
-			expectedTotalCount: 0,
+			expectedUserIDs:    []string{users[4].Id},
+			expectedTotalCount: 1,
 			groupIDs:           []string{groups[0].Id, groups[1].Id},
 			page:               0,
 			perPage:            100,
@@ -2495,14 +2568,47 @@ func testChannelMembersMinusGroupMembers(t *testing.T, ss store.Store) {
 			require.Nil(t, err)
 			require.ElementsMatch(t, tc.expectedUserIDs, mapUserIDs(actual))
 
-			for _, user := range actual {
-				require.NotNil(t, user.GroupIDs)
-				require.True(t, (user.SchemeAdmin || user.SchemeUser))
-			}
-
 			actualCount, err := ss.Group().CountChannelMembersMinusGroupMembers(channel.Id, tc.groupIDs)
 			require.Nil(t, err)
 			require.Equal(t, tc.expectedTotalCount, actualCount)
 		})
 	}
+}
+
+func groupTestGetMemberCount(t *testing.T, ss store.Store) {
+	group := &model.Group{
+		Name:        model.NewId(),
+		DisplayName: model.NewId(),
+		Source:      model.GroupSourceLdap,
+		Description: model.NewId(),
+		RemoteId:    model.NewId(),
+	}
+	group, err := ss.Group().Create(group)
+	require.Nil(t, err)
+
+	var user *model.User
+
+	for i := 0; i < 2; i++ {
+		user = &model.User{
+			Email:    MakeEmail(),
+			Username: fmt.Sprintf("%d_%s", i, model.NewId()),
+		}
+		user, err = ss.User().Save(user)
+		require.Nil(t, err)
+
+		_, err = ss.Group().UpsertMember(group.Id, user.Id)
+		require.Nil(t, err)
+	}
+
+	count, err := ss.Group().GetMemberCount(group.Id)
+	require.Nil(t, err)
+	require.Equal(t, int64(2), count)
+
+	user.DeleteAt = 1
+	_, err = ss.User().Update(user, true)
+	require.Nil(t, err)
+
+	count, err = ss.Group().GetMemberCount(group.Id)
+	require.Nil(t, err)
+	require.Equal(t, int64(1), count)
 }

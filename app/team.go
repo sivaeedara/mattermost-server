@@ -89,6 +89,9 @@ func (a *App) isTeamEmailAddressAllowed(email string, allowedDomains string) boo
 }
 
 func (a *App) isTeamEmailAllowed(user *model.User, team *model.Team) bool {
+	if user.IsBot {
+		return true
+	}
 	email := strings.ToLower(user.Email)
 	return a.isTeamEmailAddressAllowed(email, team.AllowedDomains)
 }
@@ -181,6 +184,24 @@ func (a *App) UpdateTeamScheme(team *model.Team) (*model.Team, *model.AppError) 
 	a.sendTeamEvent(oldTeam, model.WEBSOCKET_EVENT_UPDATE_TEAM)
 
 	return oldTeam, nil
+}
+
+func (a *App) UpdateTeamPrivacy(teamId string, teamType string, allowOpenInvite bool) *model.AppError {
+	oldTeam, err := a.GetTeam(teamId)
+	if err != nil {
+		return err
+	}
+
+	oldTeam.Type = teamType
+	oldTeam.AllowOpenInvite = allowOpenInvite
+
+	if oldTeam, err = a.Srv.Store.Team().Update(oldTeam); err != nil {
+		return err
+	}
+
+	a.sendTeamEvent(oldTeam, model.WEBSOCKET_EVENT_UPDATE_TEAM)
+
+	return nil
 }
 
 func (a *App) PatchTeam(teamId string, patch *model.TeamPatch) (*model.Team, *model.AppError) {
@@ -633,12 +654,36 @@ func (a *App) GetAllPrivateTeamsPage(offset int, limit int) ([]*model.Team, *mod
 	return a.Srv.Store.Team().GetAllPrivateTeamPageListing(offset, limit)
 }
 
+func (a *App) GetAllPrivateTeamsPageWithCount(offset int, limit int) (*model.TeamsWithCount, *model.AppError) {
+	totalCount, err := a.Srv.Store.Team().AnalyticsPrivateTeamCount()
+	if err != nil {
+		return nil, err
+	}
+	teams, err := a.Srv.Store.Team().GetAllPrivateTeamPageListing(offset, limit)
+	if err != nil {
+		return nil, err
+	}
+	return &model.TeamsWithCount{Teams: teams, TotalCount: totalCount}, nil
+}
+
 func (a *App) GetAllPublicTeams() ([]*model.Team, *model.AppError) {
 	return a.Srv.Store.Team().GetAllTeamListing()
 }
 
 func (a *App) GetAllPublicTeamsPage(offset int, limit int) ([]*model.Team, *model.AppError) {
 	return a.Srv.Store.Team().GetAllTeamPageListing(offset, limit)
+}
+
+func (a *App) GetAllPublicTeamsPageWithCount(offset int, limit int) (*model.TeamsWithCount, *model.AppError) {
+	totalCount, err := a.Srv.Store.Team().AnalyticsPublicTeamCount()
+	if err != nil {
+		return nil, err
+	}
+	teams, err := a.Srv.Store.Team().GetAllPublicTeamPageListing(offset, limit)
+	if err != nil {
+		return nil, err
+	}
+	return &model.TeamsWithCount{Teams: teams, TotalCount: totalCount}, nil
 }
 
 func (a *App) SearchAllTeams(term string) ([]*model.Team, *model.AppError) {
@@ -1234,7 +1279,7 @@ func (a *App) SetTeamIconFromMultiPartFile(teamId string, file multipart.File) *
 		return model.NewAppError("SetTeamIcon", "api.team.set_team_icon.decode_config.app_error", nil, err.Error(), http.StatusBadRequest)
 	}
 	if config.Width*config.Height > model.MaxImageSize {
-		return model.NewAppError("SetTeamIcon", "api.team.set_team_icon.too_large.app_error", nil, err.Error(), http.StatusBadRequest)
+		return model.NewAppError("SetTeamIcon", "api.team.set_team_icon.too_large.app_error", nil, "", http.StatusBadRequest)
 	}
 
 	file.Seek(0, 0)

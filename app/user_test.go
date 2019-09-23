@@ -361,6 +361,22 @@ func TestUpdateUserEmail(t *testing.T) {
 		assert.Nil(t, err)
 		assert.Equal(t, newEmail, user2.Email)
 		assert.True(t, user2.EmailVerified)
+
+		// Create bot user
+		botuser := model.User{
+			Email:    "botuser@localhost",
+			Username: model.NewId(),
+			IsBot:    true,
+		}
+		_, err = th.App.Srv.Store.User().Save(&botuser)
+		assert.Nil(t, err)
+
+		newBotEmail := th.MakeEmail()
+		botuser.Email = newBotEmail
+		botuser2, err := th.App.UpdateUser(&botuser, false)
+		assert.Nil(t, err)
+		assert.Equal(t, botuser2.Email, newBotEmail)
+
 	})
 
 	t.Run("RequireVerificationAlreadyUsedEmail", func(t *testing.T) {
@@ -388,6 +404,21 @@ func TestUpdateUserEmail(t *testing.T) {
 		user2, err := th.App.UpdateUser(user, false)
 		assert.Nil(t, err)
 		assert.Equal(t, newEmail, user2.Email)
+
+		// Create bot user
+		botuser := model.User{
+			Email:    "botuser@localhost",
+			Username: model.NewId(),
+			IsBot:    true,
+		}
+		_, err = th.App.Srv.Store.User().Save(&botuser)
+		assert.Nil(t, err)
+
+		newBotEmail := th.MakeEmail()
+		botuser.Email = newBotEmail
+		botuser2, err := th.App.UpdateUser(&botuser, false)
+		assert.Nil(t, err)
+		assert.Equal(t, botuser2.Email, newBotEmail)
 	})
 }
 
@@ -635,6 +666,32 @@ func TestPermanentDeleteUser(t *testing.T) {
 		t.Log(err)
 		t.Fatal("Unable to upload file")
 	}
+
+	bot, err := th.App.CreateBot(&model.Bot{
+		Username:    "botname",
+		Description: "a bot",
+		OwnerId:     model.NewId(),
+	})
+	assert.Nil(t, err)
+
+	var bots1 []*model.Bot
+	var bots2 []*model.Bot
+
+	sqlSupplier := mainHelper.GetSqlSupplier()
+	_, err1 := sqlSupplier.GetMaster().Select(&bots1, "SELECT * FROM Bots")
+	assert.Nil(t, err1)
+	assert.Equal(t, 1, len(bots1))
+
+	// test that bot is deleted from bots table
+	retUser1, err := th.App.GetUser(bot.UserId)
+	assert.Nil(t, err)
+
+	err = th.App.PermanentDeleteUser(retUser1)
+	assert.Nil(t, err)
+
+	_, err1 = sqlSupplier.GetMaster().Select(&bots2, "SELECT * FROM Bots")
+	assert.Nil(t, err1)
+	assert.Equal(t, 0, len(bots2))
 
 	err = th.App.PermanentDeleteUser(th.BasicUser)
 	if err != nil {

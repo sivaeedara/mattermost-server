@@ -409,10 +409,12 @@ func applyRoleFilter(query sq.SelectBuilder, role string, isPostgreSQL bool) sq.
 		return query
 	}
 
-	roleParam := fmt.Sprintf("%%%s%%", role)
 	if isPostgreSQL {
+		roleParam := fmt.Sprintf("%%%s%%", sanitizeSearchTerm(role, "\\"))
 		return query.Where("u.Roles LIKE LOWER(?)", roleParam)
 	}
+
+	roleParam := fmt.Sprintf("%%%s%%", sanitizeSearchTerm(role, "*"))
 
 	return query.Where("u.Roles LIKE ? ESCAPE '*'", roleParam)
 }
@@ -673,41 +675,37 @@ func (us SqlUserStore) GetProfilesNotInChannel(teamId string, channelId string, 
 	return users, nil
 }
 
-func (us SqlUserStore) GetProfilesWithoutTeam(offset int, limit int, viewRestrictions *model.ViewUsersRestrictions) store.StoreChannel {
-	return store.Do(func(result *store.StoreResult) {
-		query := us.usersQuery.
-			Where(`(
-				SELECT
-					COUNT(0)
-				FROM
-					TeamMembers
-				WHERE
-					TeamMembers.UserId = u.Id
-					AND TeamMembers.DeleteAt = 0
-			) = 0`).
-			OrderBy("u.Username ASC").
-			Offset(uint64(offset)).Limit(uint64(limit))
+func (us SqlUserStore) GetProfilesWithoutTeam(offset int, limit int, viewRestrictions *model.ViewUsersRestrictions) ([]*model.User, *model.AppError) {
+	query := us.usersQuery.
+		Where(`(
+			SELECT
+				COUNT(0)
+			FROM
+				TeamMembers
+			WHERE
+				TeamMembers.UserId = u.Id
+				AND TeamMembers.DeleteAt = 0
+		) = 0`).
+		OrderBy("u.Username ASC").
+		Offset(uint64(offset)).Limit(uint64(limit))
 
-		query = applyViewRestrictionsFilter(query, viewRestrictions, true)
+	query = applyViewRestrictionsFilter(query, viewRestrictions, true)
 
-		queryString, args, err := query.ToSql()
-		if err != nil {
-			result.Err = model.NewAppError("SqlUserStore.GetProfilesWithoutTeam", "store.sql_user.app_error", nil, err.Error(), http.StatusInternalServerError)
-			return
-		}
+	queryString, args, err := query.ToSql()
+	if err != nil {
+		return nil, model.NewAppError("SqlUserStore.GetProfilesWithoutTeam", "store.sql_user.app_error", nil, err.Error(), http.StatusInternalServerError)
+	}
 
-		var users []*model.User
-		if _, err := us.GetReplica().Select(&users, queryString, args...); err != nil {
-			result.Err = model.NewAppError("SqlUserStore.GetProfilesWithoutTeam", "store.sql_user.get_profiles.app_error", nil, err.Error(), http.StatusInternalServerError)
-			return
-		}
+	var users []*model.User
+	if _, err := us.GetReplica().Select(&users, queryString, args...); err != nil {
+		return nil, model.NewAppError("SqlUserStore.GetProfilesWithoutTeam", "store.sql_user.get_profiles.app_error", nil, err.Error(), http.StatusInternalServerError)
+	}
 
-		for _, u := range users {
-			u.Sanitize(map[string]bool{})
-		}
+	for _, u := range users {
+		u.Sanitize(map[string]bool{})
+	}
 
-		result.Data = users
-	})
+	return users, nil
 }
 
 func (us SqlUserStore) GetProfilesByUsernames(usernames []string, viewRestrictions *model.ViewUsersRestrictions) ([]*model.User, *model.AppError) {
@@ -1113,11 +1111,17 @@ func (us SqlUserStore) Count(options model.UserCountOptions) (int64, *model.AppE
 	return count, nil
 }
 
-func (us SqlUserStore) AnalyticsActiveCount(timePeriod int64) (int64, *model.AppError) {
+func (us SqlUserStore) AnalyticsActiveCount(timePeriod int64, options model.UserCountOptions) (int64, *model.AppError) {
 
 	time := model.GetMillis() - timePeriod
 
-	query := "SELECT COUNT(*) FROM Status WHERE LastActivityAt > :Time"
+	query := "SELECT COUNT(*) FROM Status s"
+
+	if options.IncludeBotAccounts {
+		query += " WHERE LastActivityAt > :Time"
+	} else {
+		query += " LEFT JOIN Bots ON s.UserId = Bots.UserId WHERE Bots.UserId IS NULL AND LastActivityAt > :Time"
+	}
 
 	v, err := us.GetReplica().SelectInt(query, map[string]interface{}{"Time": time})
 	if err != nil {
@@ -1248,15 +1252,6 @@ func (us SqlUserStore) SearchInChannel(channelId string, term string, options *m
 	return result.Data.([]*model.User), nil
 }
 
-var escapeLikeSearchChar = []string{
-	"%",
-	"_",
-}
-
-var ignoreLikeSearchChar = []string{
-	"*",
-}
-
 var spaceFulltextSearchChar = []string{
 	"<",
 	">",
@@ -1292,16 +1287,7 @@ func generateSearchQuery(query sq.SelectBuilder, terms []string, fields []string
 
 func (us SqlUserStore) performSearch(query sq.SelectBuilder, term string, options *model.UserSearchOptions) store.StoreResult {
 	result := store.StoreResult{}
-
-	// These chars must be removed from the like query.
-	for _, c := range ignoreLikeSearchChar {
-		term = strings.Replace(term, c, "", -1)
-	}
-
-	// These chars must be escaped in the like query.
-	for _, c := range escapeLikeSearchChar {
-		term = strings.Replace(term, c, "*"+c, -1)
-	}
+	term = sanitizeSearchTerm(term, "*")
 
 	searchType := USER_SEARCH_TYPE_NAMES_NO_FULL_NAME
 	if options.AllowEmails {

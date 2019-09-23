@@ -2133,17 +2133,7 @@ func (s SqlChannelStore) SearchMore(userId string, teamId string, term string) (
 }
 
 func (s SqlChannelStore) buildLIKEClause(term string, searchColumns string) (likeClause, likeTerm string) {
-	likeTerm = term
-
-	// These chars must be removed from the like query.
-	for _, c := range ignoreLikeSearchChar {
-		likeTerm = strings.Replace(likeTerm, c, "", -1)
-	}
-
-	// These chars must be escaped in the like query.
-	for _, c := range escapeLikeSearchChar {
-		likeTerm = strings.Replace(likeTerm, c, "*"+c, -1)
-	}
+	likeTerm = sanitizeSearchTerm(term, "*")
 
 	if likeTerm == "" {
 		return
@@ -2188,7 +2178,7 @@ func (s SqlChannelStore) buildFulltextClause(term string, searchColumns string) 
 
 		fulltextTerm = strings.Join(splitTerm, " ")
 
-		fulltextClause = fmt.Sprintf("((to_tsvector('english', %s)) @@ to_tsquery(:FulltextTerm))", convertMySQLFullTextColumnsToPostgres(searchColumns))
+		fulltextClause = fmt.Sprintf("((to_tsvector('english', %s)) @@ to_tsquery('english', :FulltextTerm))", convertMySQLFullTextColumnsToPostgres(searchColumns))
 	} else if s.DriverName() == model.DATABASE_DRIVER_MYSQL {
 		splitTerm := strings.Fields(fulltextTerm)
 		for i, t := range strings.Fields(fulltextTerm) {
@@ -2303,6 +2293,7 @@ func (s SqlChannelStore) getSearchGroupChannelsQuery(userId, term string, isPost
 
 	for idx, term := range terms {
 		argName := fmt.Sprintf("Term%v", idx)
+		term = sanitizeSearchTerm(term, "\\")
 		likeClauses = append(likeClauses, fmt.Sprintf(baseLikeClause, ":"+argName))
 		args[argName] = "%" + term + "%"
 	}

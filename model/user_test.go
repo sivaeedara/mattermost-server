@@ -252,6 +252,42 @@ func TestUserGetDisplayName(t *testing.T) {
 	}
 }
 
+func TestUserGetDisplayNameWithPrefix(t *testing.T) {
+	user := User{Username: "username"}
+
+	if displayName := user.GetDisplayNameWithPrefix(SHOW_FULLNAME, "@"); displayName != "@username" {
+		t.Fatal("Display name should be username")
+	}
+
+	if displayName := user.GetDisplayNameWithPrefix(SHOW_NICKNAME_FULLNAME, "@"); displayName != "@username" {
+		t.Fatal("Display name should be username")
+	}
+
+	if displayName := user.GetDisplayNameWithPrefix(SHOW_USERNAME, "@"); displayName != "@username" {
+		t.Fatal("Display name should be username")
+	}
+
+	user.FirstName = "first"
+	user.LastName = "last"
+
+	if displayName := user.GetDisplayNameWithPrefix(SHOW_FULLNAME, "@"); displayName != "first last" {
+		t.Fatal("Display name should be full name")
+	}
+
+	if displayName := user.GetDisplayNameWithPrefix(SHOW_NICKNAME_FULLNAME, "@"); displayName != "first last" {
+		t.Fatal("Display name should be full name since there is no nickname")
+	}
+
+	if displayName := user.GetDisplayNameWithPrefix(SHOW_USERNAME, "@"); displayName != "@username" {
+		t.Fatal("Display name should be username")
+	}
+
+	user.Nickname = "nickname"
+	if displayName := user.GetDisplayNameWithPrefix(SHOW_NICKNAME_FULLNAME, "@"); displayName != "nickname" {
+		t.Fatal("Display name should be nickname")
+	}
+}
+
 var usernames = []struct {
 	value    string
 	expected bool
@@ -391,9 +427,9 @@ func TestIsValidLocale(t *testing.T) {
 
 func TestUserSlice(t *testing.T) {
 	t.Run("FilterByActive", func(t *testing.T) {
-		user0 := &User{Id: "user0", DeleteAt: 0}
-		user1 := &User{Id: "user1", DeleteAt: 0}
-		user2 := &User{Id: "user2", DeleteAt: 1}
+		user0 := &User{Id: "user0", DeleteAt: 0, IsBot: true}
+		user1 := &User{Id: "user1", DeleteAt: 0, IsBot: true}
+		user2 := &User{Id: "user2", DeleteAt: 1, IsBot: false}
 
 		slice := UserSlice([]*User{user0, user1, user2})
 
@@ -408,5 +444,8 @@ func TestUserSlice(t *testing.T) {
 		for _, user := range inactiveUsers {
 			assert.True(t, user.DeleteAt != 0)
 		}
+
+		nonBotUsers := slice.FilterWithoutBots()
+		assert.Equal(t, 1, len(nonBotUsers))
 	})
 }

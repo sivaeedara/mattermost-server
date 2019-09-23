@@ -3296,7 +3296,7 @@
   },
   {
     "id": "app.notification.body.intro.direct.generic",
-    "translation": "You have a new Direct Message from @{{.SenderName}}"
+    "translation": "You have a new Direct Message from {{.SenderName}}"
   },
   {
     "id": "app.notification.body.intro.group_message.full",
@@ -3304,7 +3304,7 @@
   },
   {
     "id": "app.notification.body.intro.group_message.generic",
-    "translation": "You have a new Group Message from @{{.SenderName}}"
+    "translation": "You have a new Group Message from {{.SenderName}}"
   },
   {
     "id": "app.notification.body.intro.notification.full",
@@ -3312,11 +3312,11 @@
   },
   {
     "id": "app.notification.body.intro.notification.generic",
-    "translation": "You have a new notification from @{{.SenderName}}"
+    "translation": "You have a new notification from {{.SenderName}}"
   },
   {
     "id": "app.notification.body.text.direct.full",
-    "translation": "@{{.SenderName}} - {{.Hour}}:{{.Minute}} {{.TimeZone}}, {{.Month}} {{.Day}}"
+    "translation": "{{.SenderName}} - {{.Hour}}:{{.Minute}} {{.TimeZone}}, {{.Month}} {{.Day}}"
   },
   {
     "id": "app.notification.body.text.direct.generic",
@@ -3328,7 +3328,7 @@
   },
   {
     "id": "app.notification.body.text.group_message.full2",
-    "translation": "@{{.SenderName}} - {{.Hour}}:{{.Minute}} {{.TimeZone}}, {{.Month}} {{.Day}}"
+    "translation": "{{.SenderName}} - {{.Hour}}:{{.Minute}} {{.TimeZone}}, {{.Month}} {{.Day}}"
   },
   {
     "id": "app.notification.body.text.group_message.generic",
@@ -3340,7 +3340,7 @@
   },
   {
     "id": "app.notification.body.text.notification.full2",
-    "translation": "@{{.SenderName}} - {{.Hour}}:{{.Minute}} {{.TimeZone}}, {{.Month}} {{.Day}}"
+    "translation": "{{.SenderName}} - {{.Hour}}:{{.Minute}} {{.TimeZone}}, {{.Month}} {{.Day}}"
   },
   {
     "id": "app.notification.body.text.notification.generic",
@@ -3348,7 +3348,7 @@
   },
   {
     "id": "app.notification.subject.direct.full",
-    "translation": "[{{.SiteName}}] New Direct Message from @{{.SenderDisplayName}} on {{.Month}} {{.Day}}, {{.Year}}"
+    "translation": "[{{.SiteName}}] New Direct Message from {{.SenderDisplayName}} on {{.Month}} {{.Day}}, {{.Year}}"
   },
   {
     "id": "app.notification.subject.group_message.full",
@@ -3385,6 +3385,10 @@
   {
     "id": "app.plugin.filesystem.app_error",
     "translation": "Encountered filesystem error"
+  },
+  {
+    "id": "app.plugin.flag_managed.app_error",
+    "translation": "Unable to set plugin as managed by the file store."
   },
   {
     "id": "app.plugin.get_cluster_plugin_statuses.app_error",
@@ -3435,12 +3439,28 @@
     "translation": "Unable to remove plugin bundle from file store."
   },
   {
+    "id": "app.plugin.restart.app_error",
+    "translation": "Unable to restart plugin on upgrade."
+  },
+  {
     "id": "app.plugin.store_bundle.app_error",
     "translation": "Unable to store the plugin to the configured file store."
   },
   {
+    "id": "app.plugin.sync.list_filestore.app_error",
+    "translation": "Error reading files from the plugins folder in the file store."
+  },
+  {
+    "id": "app.plugin.sync.read_local_folder.app_error",
+    "translation": "Error reading local plugins folder."
+  },
+  {
     "id": "app.plugin.upload_disabled.app_error",
     "translation": "Plugins and/or plugin uploads have been disabled."
+  },
+  {
+    "id": "app.plugin.webapp_bundle.app_error",
+    "translation": "Unable to generate plugin webapp bundle."
   },
   {
     "id": "app.role.check_roles_exist.role_not_found",
@@ -4384,7 +4404,7 @@
   },
   {
     "id": "model.config.is_valid.display.custom_url_schemes.app_error",
-    "translation": "The custom URL scheme {{.Scheme}} is invalid. Custom URL schemes must start with a letter and contain only letters, numbers and hyphen (-)."
+    "translation": "The custom URL scheme {{.Scheme}} is invalid. Custom URL schemes must start with a letter and contain only letters, numbers, plus (+), period (.) and hyphen (-)."
   },
   {
     "id": "model.config.is_valid.elastic_search.aggregate_posts_after_days.app_error",
@@ -6569,6 +6589,14 @@
   {
     "id": "store.sql_team.analytics_get_team_count_for_scheme.app_error",
     "translation": "Unable to get the channel count for the scheme."
+  },
+  {
+    "id": "store.sql_team.analytics_private_team_count.app_error",
+    "translation": "Unable to count the private teams"
+  },
+  {
+    "id": "store.sql_team.analytics_public_team_count.app_error",
+    "translation": "Unable to count the public teams"
   },
   {
     "id": "store.sql_team.analytics_team_count.app_error",

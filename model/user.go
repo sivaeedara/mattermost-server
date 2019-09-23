@@ -161,6 +161,17 @@ func (u UserSlice) IDs() []string {
 	return ids
 }
 
+func (u UserSlice) FilterWithoutBots() UserSlice {
+	var matches []*User
+
+	for _, user := range u {
+		if !user.IsBot {
+			matches = append(matches, user)
+		}
+	}
+	return UserSlice(matches)
+}
+
 func (u UserSlice) FilterByActive(active bool) UserSlice {
 	var matches []*User
 
@@ -483,6 +494,18 @@ func (u *User) Sanitize(options map[string]bool) {
 	}
 }
 
+// Remove any input data from the user object that is not user controlled
+func (u *User) SanitizeInput() {
+	u.AuthData = NewString("")
+	u.AuthService = ""
+	u.LastPasswordUpdate = 0
+	u.LastPictureUpdate = 0
+	u.FailedAttempts = 0
+	u.EmailVerified = false
+	u.MfaActive = false
+	u.MfaSecret = ""
+}
+
 func (u *User) ClearNonProfileFields() {
 	u.Password = ""
 	u.AuthData = NewString("")
@@ -528,8 +551,8 @@ func (u *User) GetFullName() string {
 	}
 }
 
-func (u *User) GetDisplayName(nameFormat string) string {
-	displayName := u.Username
+func (u *User) getDisplayName(baseName, nameFormat string) string {
+	displayName := baseName
 
 	if nameFormat == SHOW_NICKNAME_FULLNAME {
 		if len(u.Nickname) > 0 {
@@ -544,6 +567,18 @@ func (u *User) GetDisplayName(nameFormat string) string {
 	}
 
 	return displayName
+}
+
+func (u *User) GetDisplayName(nameFormat string) string {
+	displayName := u.Username
+
+	return u.getDisplayName(displayName, nameFormat)
+}
+
+func (u *User) GetDisplayNameWithPrefix(nameFormat, prefix string) string {
+	displayName := prefix + u.Username
+
+	return u.getDisplayName(displayName, nameFormat)
 }
 
 func (u *User) GetRoles() []string {
@@ -772,11 +807,22 @@ func IsValidLocale(locale string) bool {
 
 type UserWithGroups struct {
 	User
-	GroupIDs    string   `json:"-"`
+	GroupIDs    *string  `json:"-"`
 	Groups      []*Group `json:"groups"`
 	SchemeGuest bool     `json:"scheme_guest"`
 	SchemeUser  bool     `json:"scheme_user"`
 	SchemeAdmin bool     `json:"scheme_admin"`
+}
+
+func (u *UserWithGroups) GetGroupIDs() []string {
+	if u.GroupIDs == nil {
+		return nil
+	}
+	trimmed := strings.TrimSpace(*u.GroupIDs)
+	if len(trimmed) == 0 {
+		return nil
+	}
+	return strings.Split(trimmed, ",")
 }
 
 type UsersWithGroupsAndCount struct {
