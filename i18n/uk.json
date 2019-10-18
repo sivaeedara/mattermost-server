@@ -172,6 +172,10 @@
     "translation": "Please add me to teams and channels you want me to interact in. To do this, use the browser or Mattermost Desktop App."
   },
   {
+    "id": "api.channel.add_guest.added",
+    "translation": "%v доданний (а) в канал %v"
+  },
+  {
     "id": "api.channel.add_member.added",
     "translation": "%v доданний (а) в канал %v"
   },
@@ -258,6 +262,10 @@
   {
     "id": "api.channel.delete_channel.type.invalid",
     "translation": "Неможливо видалити канали прямого або групового повідомлення"
+  },
+  {
+    "id": "api.channel.guest_join_channel.post_and_forget",
+    "translation": "%v joined the channel as guest."
   },
   {
     "id": "api.channel.join_channel.permissions.app_error",
@@ -378,6 +386,10 @@
   {
     "id": "api.channel.update_channel_member_roles.scheme_role.app_error",
     "translation": "Надана роль керується схемою, тому не може бути застосована безпосередньо до члену каналу"
+  },
+  {
+    "id": "api.channel.update_channel_privacy.default_channel_error",
+    "translation": "The default channel cannot be made private."
   },
   {
     "id": "api.channel.update_channel_scheme.license.error",
@@ -1863,6 +1875,18 @@
     "translation": "Параметр, необхідний для додавання користувача до команди."
   },
   {
+    "id": "api.team.add_user_to_team_from_invite.guest.app_error",
+    "translation": "Guests are restricted from joining a team with a invite link. Please request a guest email invitation to the team."
+  },
+  {
+    "id": "api.team.demote_user_to_guest.disabled.error",
+    "translation": "Guest accounts are disabled."
+  },
+  {
+    "id": "api.team.demote_user_to_guest.license.error",
+    "translation": "Your license does not support guest accounts"
+  },
+  {
     "id": "api.team.get_invite_info.not_open_team",
     "translation": "Запрошення недійсне, оскільки це не відкрита команда."
   },
@@ -1907,16 +1931,24 @@
     "translation": "Error invalidating email invites."
   },
   {
+    "id": "api.team.invate_guests_to_channels.disabled.error",
+    "translation": "Guest accounts are disabled"
+  },
+  {
+    "id": "api.team.invate_guests_to_channels.license.error",
+    "translation": "Your license does not support guest accounts"
+  },
+  {
+    "id": "api.team.invite_guests.channel_in_invalid_team.app_error",
+    "translation": "The channels of the invite must be part of the team of the invite."
+  },
+  {
     "id": "api.team.invite_members.disabled.app_error",
     "translation": "Запрошення електронної пошти відключені."
   },
   {
     "id": "api.team.invite_members.invalid_email.app_error",
     "translation": "Наступні адреси електронної пошти не належать до прийнятого домену: {{.Addresses}}. Будь ласка, зв'яжіться зі своїм системним адміністратором для деталей."
-  },
-  {
-    "id": "api.team.invite_members.member",
-    "translation": "учасник "
   },
   {
     "id": "api.team.invite_members.no_one.app_error",
@@ -1949,6 +1981,14 @@
   {
     "id": "api.team.move_channel.success",
     "translation": "Цей канал був перенесений у цю команду з% v."
+  },
+  {
+    "id": "api.team.promote_guest_to_user.disabled.error",
+    "translation": "Guest accounts are disabled."
+  },
+  {
+    "id": "api.team.promote_guest_to_user.license.error",
+    "translation": "Your license does not support guest accounts"
   },
   {
     "id": "api.team.remove_member.group_constrained.app_error",
@@ -2112,11 +2152,19 @@
   },
   {
     "id": "api.templates.invite_body.info",
-    "translation": "Команда {{.SenderStatus}} [[{{.SenderName}}]] запрошує вас приєднатися до [[{{.TeamDisplayName}}]]."
+    "translation": "[[{{.SenderName}}]], has invited you to join [[{{.TeamDisplayName}}]]."
   },
   {
     "id": "api.templates.invite_body.title",
     "translation": "Вас запросили"
+  },
+  {
+    "id": "api.templates.invite_body_guest.info",
+    "translation": "[[{{.SenderName}}]], has invited you to join team [[{{.TeamDisplayName}}]] as a guest."
+  },
+  {
+    "id": "api.templates.invite_guest_subject",
+    "translation": "[{{.SiteName}}] {{.SenderName}} запросив вас приєднатися до команди {{.TeamDisplayName}}"
   },
   {
     "id": "api.templates.invite_subject",
@@ -2367,6 +2415,18 @@
     "translation": "Створення акаунтів відключено."
   },
   {
+    "id": "api.user.create_user.guest_accounts.disabled.app_error",
+    "translation": "Guest accounts are disabled"
+  },
+  {
+    "id": "api.user.create_user.guest_accounts.license.app_error",
+    "translation": "Your license does not support guest accounts"
+  },
+  {
+    "id": "api.user.create_user.invalid_invitation_type.app_error",
+    "translation": "Unable to create the user, invalid invitation."
+  },
+  {
     "id": "api.user.create_user.no_open_server",
     "translation": "Цей сервер не дозволяє відкрити реєстрацію. Будь ласка, зверніться до свого адміністратора, щоб отримати запрошення."
   },
@@ -2381,6 +2441,10 @@
   {
     "id": "api.user.create_user.signup_link_invalid.app_error",
     "translation": "Посилання для реєстрації здається невірне"
+  },
+  {
+    "id": "api.user.demote_user_to_guest.already_guest.app_error",
+    "translation": "Unable to convert the user to guest because is already a guest"
   },
   {
     "id": "api.user.email_to_ldap.not_available.app_error",
@@ -2423,6 +2487,14 @@
     "translation": "Ви намагаєтесь отримати доступ експериментальної можливості ClientSideCert без дійсної enterprise-ліцензії"
   },
   {
+    "id": "api.user.login.guest_accounts.disabled.error",
+    "translation": "Guest accounts are disabled"
+  },
+  {
+    "id": "api.user.login.guest_accounts.license.error",
+    "translation": "Your license does not support guest accounts"
+  },
+  {
     "id": "api.user.login.inactive.app_error",
     "translation": "Вхід не вдалося, оскільки ваш обліковий запис було вимкнено. Будь ласка, зв'яжіться з адміністратором."
   },
@@ -2436,7 +2508,7 @@
   },
   {
     "id": "api.user.login.invalid_credentials_sso",
-    "translation": "Enter a valid email or username and/or password, or sign in using another method.\n"
+    "translation": "Enter a valid email or username and/or password, or sign in using another method."
   },
   {
     "id": "api.user.login.invalid_credentials_username",
@@ -2473,6 +2545,10 @@
   {
     "id": "api.user.oauth_to_email.not_available.app_error",
     "translation": "Автентифікація передачі не налаштовується або недоступна на цьому сервері."
+  },
+  {
+    "id": "api.user.promote_guest_to_user.no_guest.app_error",
+    "translation": "Unable to convert the guest to regular user because is not a guest"
   },
   {
     "id": "api.user.reset_password.broken_token.app_error",
@@ -2587,6 +2663,14 @@
     "translation": "Не вдалося оновити пароль, оскільки ми не змогли знайти дійсний обліковий запис"
   },
   {
+    "id": "api.user.update_user.accepted_domain.app_error",
+    "translation": "Ваш електронний лист не належить до прийнятого домену. Будь ласка, зв'яжіться зі своїм адміністратором або зареєструйтеся за допомогою іншого електронного листа."
+  },
+  {
+    "id": "api.user.update_user.accepted_guest_domain.app_error",
+    "translation": "Ваш електронний лист не належить до прийнятого домену. Будь ласка, зв'яжіться зі своїм адміністратором або зареєструйтеся за допомогою іншого електронного листа."
+  },
+  {
     "id": "api.user.upload_profile_user.array.app_error",
     "translation": "Порожній масив 'image' в запиті "
   },
@@ -2697,6 +2781,10 @@
   {
     "id": "app.admin.test_email.failure",
     "translation": "З'єднання невдало: {{.Error}}"
+  },
+  {
+    "id": "app.admin.test_site_url.failure",
+    "translation": "This is not a valid live URL"
   },
   {
     "id": "app.channel.create_channel.no_team_id.app_error",
@@ -3328,7 +3416,7 @@
   },
   {
     "id": "app.notification.body.text.group_message.full2",
-    "translation": "{{.SenderName}} - {{.Hour}}:{{.Minute}} {{.TimeZone}}, {{.Month}} {{.Day}}  "
+    "translation": "{{.SenderName}} - {{.Hour}}:{{.Minute}} {{.TimeZone}}, {{.Month}} {{.Day}} "
   },
   {
     "id": "app.notification.body.text.group_message.generic",
@@ -3340,7 +3428,7 @@
   },
   {
     "id": "app.notification.body.text.notification.full2",
-    "translation": "{{.SenderName}} - {{.Hour}}:{{.Minute}} {{.TimeZone}}, {{.Month}} {{.Day}}"
+    "translation": "{{.SenderName}} - {{.Hour}}:{{.Minute}} {{.TimeZone}}, {{.Month}} {{.Day}} "
   },
   {
     "id": "app.notification.body.text.notification.generic",
@@ -3421,6 +3509,22 @@
   {
     "id": "app.plugin.manifest.app_error",
     "translation": "Не вдається знайти маніфест для вилученого плагіна"
+  },
+  {
+    "id": "app.plugin.marketplace_client.app_error",
+    "translation": "Failed to create marketplace client."
+  },
+  {
+    "id": "app.plugin.marketplace_disabled.app_error",
+    "translation": "Плагіни відключені. Будь ласка, перевірте свої журнали на деталі."
+  },
+  {
+    "id": "app.plugin.marketplace_plugins.app_error",
+    "translation": "Failed to get plugins from the marketplace server."
+  },
+  {
+    "id": "app.plugin.marshal.app_error",
+    "translation": "Failed to marshal marketplace plugins."
   },
   {
     "id": "app.plugin.mvdir.app_error",
@@ -4092,7 +4196,7 @@
   },
   {
     "id": "mfa.validate_token.authenticate.app_error",
-    "translation": "Помилка при спробі аутентифікації за допомогою MFA маркера"
+    "translation": "Невірний MFA токен."
   },
   {
     "id": "migrations.worker.run_advanced_permissions_phase_2_migration.invalid_progress",
@@ -4809,6 +4913,22 @@
   {
     "id": "model.group_syncable.type.app_error",
     "translation": "invalid type property for group syncable"
+  },
+  {
+    "id": "model.guest.is_valid.channel.app_error",
+    "translation": "Неприпустимий ідентифікатор каналу"
+  },
+  {
+    "id": "model.guest.is_valid.channels.app_error",
+    "translation": "Неприпустимий ідентифікатор каналу"
+  },
+  {
+    "id": "model.guest.is_valid.email.app_error",
+    "translation": "Некоректна адреса електронної пошти"
+  },
+  {
+    "id": "model.guest.is_valid.emails.app_error",
+    "translation": "Некоректна адреса електронної пошти"
   },
   {
     "id": "model.incoming_hook.channel_id.app_error",
@@ -5567,6 +5687,10 @@
     "translation": "Неможливо отримати канали"
   },
   {
+    "id": "store.sql_channel.get_pinnedpost_count.app_error",
+    "translation": "Не вдалося отримати кількість учасників каналу"
+  },
+  {
     "id": "store.sql_channel.get_public_channels.get.app_error",
     "translation": "Неможливо отримати канали"
   },
@@ -6255,10 +6379,6 @@
     "translation": "Не вдається вибрати повідомлення, які потрібно видалити для користувача (забагато), будь ласка, повторно запустіть"
   },
   {
-    "id": "store.sql_post.query_max_post_size.error",
-    "translation": "Ми не змогли визначити максимально підтримуваний розмір повідомлення"
-  },
-  {
     "id": "store.sql_post.save.app_error",
     "translation": "Не вдається зберегти публікацію"
   },
@@ -6301,10 +6421,6 @@
   {
     "id": "store.sql_preference.insert.save.app_error",
     "translation": "Не вдається зберегти налаштування"
-  },
-  {
-    "id": "store.sql_preference.is_feature_enabled.app_error",
-    "translation": "Виникла помилка при пошуку налаштувань пред-релізу функції"
   },
   {
     "id": "store.sql_preference.permanent_delete_by_user.app_error",
@@ -6523,6 +6639,10 @@
     "translation": "Не вдається оновити last_activity_at"
   },
   {
+    "id": "store.sql_session.update_props.app_error",
+    "translation": "Unable to update session props"
+  },
+  {
     "id": "store.sql_session.update_roles.app_error",
     "translation": "Не вдається оновити ролі"
   },
@@ -6533,18 +6653,6 @@
   {
     "id": "store.sql_status.get.missing.app_error",
     "translation": "Не існує запису для даного статусу"
-  },
-  {
-    "id": "store.sql_status.get_online.app_error",
-    "translation": "Виникла проблема при отриманні всіх статусів \"У мережі\""
-  },
-  {
-    "id": "store.sql_status.get_online_away.app_error",
-    "translation": "Виникла помилка при отриманні всіх статусів \"У мережі/Відійшов\""
-  },
-  {
-    "id": "store.sql_status.get_team_statuses.app_error",
-    "translation": "Виникла помилка з отриманням всіх статусів учасників команди"
   },
   {
     "id": "store.sql_status.get_total_active_users_count.app_error",
@@ -6589,6 +6697,14 @@
   {
     "id": "store.sql_team.analytics_get_team_count_for_scheme.app_error",
     "translation": "Не вдалося отримати номер каналу для схеми."
+  },
+  {
+    "id": "store.sql_team.analytics_private_team_count.app_error",
+    "translation": "Неможливо підрахувати команди"
+  },
+  {
+    "id": "store.sql_team.analytics_public_team_count.app_error",
+    "translation": "Неможливо підрахувати команди"
   },
   {
     "id": "store.sql_team.analytics_team_count.app_error",
@@ -6644,6 +6760,10 @@
   },
   {
     "id": "store.sql_team.get_by_name.app_error",
+    "translation": "Не вдається знайти існуючу команду"
+  },
+  {
+    "id": "store.sql_team.get_by_name.missing.app_error",
     "translation": "Не вдається знайти існуючу команду"
   },
   {
@@ -6755,10 +6875,6 @@
     "translation": "Виникла помилка оновлення команди"
   },
   {
-    "id": "store.sql_team.update_display_name.app_error",
-    "translation": "Неможливо оновити назву команди"
-  },
-  {
     "id": "store.sql_team.update_last_team_icon_update.app_error",
     "translation": "Не вдалося оновити дату останнього оновлення піктограми команди"
   },
@@ -6817,6 +6933,26 @@
   {
     "id": "store.sql_user.count.app_error",
     "translation": "UserCountOptions don't make sense"
+  },
+  {
+    "id": "store.sql_user.demote_user_to_guest.channel_members_update.app_error",
+    "translation": "Не вдалося оновити заголовок прямого каналу"
+  },
+  {
+    "id": "store.sql_user.demote_user_to_guest.commit_transaction.app_error",
+    "translation": "Не вдалося здійснити транзакцію бази даних"
+  },
+  {
+    "id": "store.sql_user.demote_user_to_guest.open_transaction.app_error",
+    "translation": "Не вдалося розпочати транзакцію бази даних"
+  },
+  {
+    "id": "store.sql_user.demote_user_to_guest.team_members_update.app_error",
+    "translation": "Не вдалося оновити заголовок прямого каналу"
+  },
+  {
+    "id": "store.sql_user.demote_user_to_guest.user_update.app_error",
+    "translation": "Не вдалося оновити користувача"
   },
   {
     "id": "store.sql_user.get.app_error",
@@ -6897,6 +7033,26 @@
   {
     "id": "store.sql_user.permanent_delete.app_error",
     "translation": "Неможливо видалити існуючий обліковий запис"
+  },
+  {
+    "id": "store.sql_user.promote_guest.channel_members_update.app_error",
+    "translation": "Не вдалося оновити заголовок прямого каналу"
+  },
+  {
+    "id": "store.sql_user.promote_guest.commit_transaction.app_error",
+    "translation": "Не вдалося здійснити транзакцію бази даних"
+  },
+  {
+    "id": "store.sql_user.promote_guest.open_transaction.app_error",
+    "translation": "Не вдалося розпочати транзакцію бази даних"
+  },
+  {
+    "id": "store.sql_user.promote_guest.team_members_update.app_error",
+    "translation": "Не вдалося оновити заголовок прямого каналу"
+  },
+  {
+    "id": "store.sql_user.promote_guest.user_update.app_error",
+    "translation": "Не вдалося оновити користувача"
   },
   {
     "id": "store.sql_user.save.app_error",
@@ -7223,12 +7379,100 @@
     "translation": "Неможливо проаналізувати вхідні дані"
   },
   {
-    "id": "web.error.unsupported_browser.message",
-    "translation": "Ваш поточний веб-переглядач не підтримується. Будь ласка, оновіть до одного з таких веб-переглядачів:"
+    "id": "web.error.unsupported_browser.browser_get_latest.chrome",
+    "translation": "Get the latest Chrome browser"
   },
   {
-    "id": "web.error.unsupported_browser.title",
-    "translation": "Непідтримуваний браузер"
+    "id": "web.error.unsupported_browser.browser_get_latest.firefox",
+    "translation": "Get the latest Firefox browser"
+  },
+  {
+    "id": "web.error.unsupported_browser.browser_get_latest.safari",
+    "translation": "Get the latest Safari browser"
+  },
+  {
+    "id": "web.error.unsupported_browser.browser_title.chrome",
+    "translation": "Google Chrome"
+  },
+  {
+    "id": "web.error.unsupported_browser.browser_title.edge",
+    "translation": "Microsoft Edge"
+  },
+  {
+    "id": "web.error.unsupported_browser.browser_title.firefox",
+    "translation": "Firefox"
+  },
+  {
+    "id": "web.error.unsupported_browser.browser_title.safari",
+    "translation": "Safari"
+  },
+  {
+    "id": "web.error.unsupported_browser.download",
+    "translation": "Download the App"
+  },
+  {
+    "id": "web.error.unsupported_browser.download_app_or_upgrade_browser",
+    "translation": "Download the Mattermost app or use a supported browser for a better experience."
+  },
+  {
+    "id": "web.error.unsupported_browser.download_the_app",
+    "translation": "Download the App"
+  },
+  {
+    "id": "web.error.unsupported_browser.install_guide.mac",
+    "translation": "Install Guide"
+  },
+  {
+    "id": "web.error.unsupported_browser.install_guide.windows",
+    "translation": "Install Guide"
+  },
+  {
+    "id": "web.error.unsupported_browser.learn_more",
+    "translation": "Learn more about supported browsers."
+  },
+  {
+    "id": "web.error.unsupported_browser.min_browser_version.chrome",
+    "translation": "Version 61+"
+  },
+  {
+    "id": "web.error.unsupported_browser.min_browser_version.edge",
+    "translation": "Version 44+"
+  },
+  {
+    "id": "web.error.unsupported_browser.min_browser_version.firefox",
+    "translation": "Version 60+"
+  },
+  {
+    "id": "web.error.unsupported_browser.min_browser_version.safari",
+    "translation": "Version 12+"
+  },
+  {
+    "id": "web.error.unsupported_browser.min_os_version.mac",
+    "translation": "macOS 10.9+"
+  },
+  {
+    "id": "web.error.unsupported_browser.min_os_version.windows",
+    "translation": "Windows 7+"
+  },
+  {
+    "id": "web.error.unsupported_browser.no_longer_support",
+    "translation": "We no longer support this browser"
+  },
+  {
+    "id": "web.error.unsupported_browser.no_longer_support_version",
+    "translation": "We no longer support this version of your browser"
+  },
+  {
+    "id": "web.error.unsupported_browser.open_system_browser.edge",
+    "translation": "Open Edge"
+  },
+  {
+    "id": "web.error.unsupported_browser.system_browser_make_default",
+    "translation": "Make default"
+  },
+  {
+    "id": "web.error.unsupported_browser.system_browser_or",
+    "translation": "or"
   },
   {
     "id": "web.get_access_token.internal_saving.app_error",

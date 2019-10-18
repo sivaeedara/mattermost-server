@@ -4,7 +4,6 @@
 package app
 
 import (
-	"fmt"
 	"io"
 	"net/http"
 	"regexp"
@@ -108,7 +107,7 @@ func (a *App) TriggerWebhook(payload *model.OutgoingWebhookPayload, hook *model.
 		a.Srv.Go(func() {
 			webhookResp, err := a.doOutgoingWebhookRequest(url, body, contentType)
 			if err != nil {
-				mlog.Error(fmt.Sprintf("Event POST failed, err=%s", err.Error()))
+				mlog.Error("Event POST failed.", mlog.Err(err))
 				return
 			}
 
@@ -139,7 +138,7 @@ func (a *App) TriggerWebhook(payload *model.OutgoingWebhookPayload, hook *model.
 					webhookResp.IconURL = hook.IconURL
 				}
 				if _, err := a.CreateWebhookPost(hook.CreatorId, channel, text, webhookResp.Username, webhookResp.IconURL, "", webhookResp.Props, webhookResp.Type, postRootId); err != nil {
-					mlog.Error(fmt.Sprintf("Failed to create response post, err=%v", err))
+					mlog.Error("Failed to create response post.", mlog.Err(err))
 				}
 			}
 		})
@@ -604,7 +603,7 @@ func (a *App) HandleIncomingWebhook(hookId string, req *model.IncomingWebhookReq
 	}
 
 	var channel *model.Channel
-	var cchan store.StoreChannel
+	var cchan chan store.StoreResult
 
 	if len(channelName) != 0 {
 		if channelName[0] == '@' {
@@ -618,14 +617,14 @@ func (a *App) HandleIncomingWebhook(hookId string, req *model.IncomingWebhookReq
 				}
 			}
 		} else if channelName[0] == '#' {
-			cchan = make(store.StoreChannel, 1)
+			cchan = make(chan store.StoreResult, 1)
 			go func() {
 				chnn, chnnErr := a.Srv.Store.Channel().GetByName(hook.TeamId, channelName[1:], true)
 				cchan <- store.StoreResult{Data: chnn, Err: chnnErr}
 				close(cchan)
 			}()
 		} else {
-			cchan = make(store.StoreChannel, 1)
+			cchan = make(chan store.StoreResult, 1)
 			go func() {
 				chnn, chnnErr := a.Srv.Store.Channel().GetByName(hook.TeamId, channelName, true)
 				cchan <- store.StoreResult{Data: chnn, Err: chnnErr}

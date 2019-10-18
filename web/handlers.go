@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/NYTimes/gziphandler"
+
 	"github.com/mattermost/mattermost-server/app"
 	"github.com/mattermost/mattermost-server/mlog"
 	"github.com/mattermost/mattermost-server/model"
@@ -55,7 +57,7 @@ type Handler struct {
 
 func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
-	mlog.Debug(fmt.Sprintf("%v - %v", r.Method, r.URL.Path))
+	mlog.Debug("request:", mlog.String("method", r.Method), mlog.String("url", r.URL.Path))
 
 	c := &Context{}
 	c.App = app.New(
@@ -239,4 +241,74 @@ func (h *Handler) checkCSRFToken(c *Context, r *http.Request, token string, toke
 	}
 
 	return csrfCheckNeeded, csrfCheckPassed
+}
+
+// ApiHandler provides a handler for API endpoints which do not require the user to be logged in order for access to be
+// granted.
+func (w *Web) ApiHandler(h func(*Context, http.ResponseWriter, *http.Request)) http.Handler {
+	handler := &Handler{
+		GetGlobalAppOptions: w.GetGlobalAppOptions,
+		HandleFunc:          h,
+		RequireSession:      false,
+		TrustRequester:      false,
+		RequireMfa:          false,
+		IsStatic:            false,
+	}
+	if *w.ConfigService.Config().ServiceSettings.WebserverMode == "gzip" {
+		return gziphandler.GzipHandler(handler)
+	}
+	return handler
+}
+
+// ApiHandlerTrustRequester provides a handler for API endpoints which do not require the user to be logged in and are
+// allowed to be requested directly rather than via javascript/XMLHttpRequest, such as site branding images or the
+// websocket.
+func (w *Web) ApiHandlerTrustRequester(h func(*Context, http.ResponseWriter, *http.Request)) http.Handler {
+	handler := &Handler{
+		GetGlobalAppOptions: w.GetGlobalAppOptions,
+		HandleFunc:          h,
+		RequireSession:      false,
+		TrustRequester:      true,
+		RequireMfa:          false,
+		IsStatic:            false,
+	}
+	if *w.ConfigService.Config().ServiceSettings.WebserverMode == "gzip" {
+		return gziphandler.GzipHandler(handler)
+	}
+	return handler
+}
+
+// ApiSessionRequired provides a handler for API endpoints which require the user to be logged in in order for access to
+// be granted.
+func (w *Web) ApiSessionRequired(h func(*Context, http.ResponseWriter, *http.Request)) http.Handler {
+	handler := &Handler{
+		GetGlobalAppOptions: w.GetGlobalAppOptions,
+		HandleFunc:          h,
+		RequireSession:      true,
+		TrustRequester:      false,
+		RequireMfa:          true,
+		IsStatic:            false,
+	}
+	if *w.ConfigService.Config().ServiceSettings.WebserverMode == "gzip" {
+		return gziphandler.GzipHandler(handler)
+	}
+	return handler
+}
+
+// apiHandlerTrustRequester provides a handler for API endpoints which do not require the user to be logged in and are
+// allowed to be requested directly rather than via javascript/XMLHttpRequest, such as site branding images or the
+// websocket.
+func (w *Web) apiHandlerTrustRequester(h func(*Context, http.ResponseWriter, *http.Request)) http.Handler {
+	handler := &Handler{
+		GetGlobalAppOptions: w.GetGlobalAppOptions,
+		HandleFunc:          h,
+		RequireSession:      false,
+		TrustRequester:      true,
+		RequireMfa:          false,
+		IsStatic:            false,
+	}
+	if *w.ConfigService.Config().ServiceSettings.WebserverMode == "gzip" {
+		return gziphandler.GzipHandler(handler)
+	}
+	return handler
 }

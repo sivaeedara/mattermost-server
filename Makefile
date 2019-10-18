@@ -1,4 +1,4 @@
-.PHONY: build package run stop run-client run-server stop-client stop-server restart restart-server restart-client start-docker clean-dist clean nuke check-style check-client-style check-server-style check-unit-tests test dist setup-mac prepare-enteprise run-client-tests setup-run-client-tests cleanup-run-client-tests test-client build-linux build-osx build-windows internal-test-web-client vet run-server-for-web-client-tests
+.PHONY: build package run stop run-client run-server stop-client stop-server restart restart-server restart-client start-docker clean-dist clean nuke check-style check-client-style check-server-style check-unit-tests test dist prepare-enteprise run-client-tests setup-run-client-tests cleanup-run-client-tests test-client build-linux build-osx build-windows internal-test-web-client vet run-server-for-web-client-tests diff-config
 
 ROOT := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 
@@ -45,8 +45,9 @@ else
 endif
 
 # Golang Flags
+export GO111MODULE=on
 GOPATH ?= $(shell go env GOPATH)
-GOFLAGS ?= $(GOFLAGS:)
+GOFLAGS ?= $(GOFLAGS:) -mod=vendor
 GO=go
 DELVE=dlv
 LDFLAGS += -X "github.com/mattermost/mattermost-server/model.BuildNumber=$(BUILD_NUMBER)"
@@ -76,19 +77,19 @@ TESTFLAGS ?= -short
 TESTFLAGSEE ?= -short
 
 # Packages lists
-TE_PACKAGES=$(shell go list ./...|grep -v plugin_tests)
+TE_PACKAGES=$(shell go list ./...)
 
 # Plugins Packages
-PLUGIN_PACKAGES=mattermost-plugin-zoom-v1.0.7
-PLUGIN_PACKAGES += mattermost-plugin-autolink-v1.0.0
+PLUGIN_PACKAGES=mattermost-plugin-zoom-v1.1.1
+PLUGIN_PACKAGES += mattermost-plugin-autolink-v1.1.1
 PLUGIN_PACKAGES += mattermost-plugin-nps-v1.0.3
-PLUGIN_PACKAGES += mattermost-plugin-custom-attributes-v1.0.1
-PLUGIN_PACKAGES += mattermost-plugin-github-v0.10.2
-PLUGIN_PACKAGES += mattermost-plugin-welcomebot-v1.1.0
+PLUGIN_PACKAGES += mattermost-plugin-custom-attributes-v1.0.2
+PLUGIN_PACKAGES += mattermost-plugin-github-v0.11.0
+PLUGIN_PACKAGES += mattermost-plugin-welcomebot-v1.1.1
 PLUGIN_PACKAGES += mattermost-plugin-aws-SNS-v1.0.2
 PLUGIN_PACKAGES += mattermost-plugin-antivirus-v0.1.1
-PLUGIN_PACKAGES += mattermost-plugin-jira-v2.1.3
-PLUGIN_PACKAGES += mattermost-plugin-gitlab-v1.0.0
+PLUGIN_PACKAGES += mattermost-plugin-jira-v2.2.2
+PLUGIN_PACKAGES += mattermost-plugin-gitlab-v1.0.1
 PLUGIN_PACKAGES += mattermost-plugin-jenkins-v1.0.0
 
 # Prepares the enterprise build if exists. The IGNORE stuff is a hack to get the Makefile to execute the commands outside a target
@@ -119,86 +120,9 @@ start-docker: ## Starts the docker containers for local development.
 ifeq ($(IS_CI),false)
 	@echo Starting docker containers
 
-	@if [ $(shell docker ps -a --no-trunc --quiet --filter name=^/mattermost-mysql$$ | wc -l) -eq 0 ]; then \
-		echo starting mattermost-mysql; \
-		docker run --name mattermost-mysql -p 3306:3306 \
-			-e MYSQL_ROOT_PASSWORD=mostest \
-			-e MYSQL_USER=mmuser \
-			-e MYSQL_PASSWORD=mostest \
-			-e MYSQL_DATABASE=mattermost_test \
-			-d mysql:5.7 > /dev/null; \
-	elif [ $(shell docker ps --no-trunc --quiet --filter name=^/mattermost-mysql$$ | wc -l) -eq 0 ]; then \
-		echo restarting mattermost-mysql; \
-		docker start mattermost-mysql > /dev/null; \
-	fi
+	docker-compose run --rm start_dependencies
+	cat tests/${LDAP_DATA}-data.ldif | docker-compose exec -T openldap bash -c 'ldapadd -x -D "cn=admin,dc=mm,dc=test,dc=com" -w mostest || true';
 
-	@if [ $(shell docker ps -a --no-trunc --quiet --filter name=^/mattermost-postgres$$ | wc -l) -eq 0 ]; then \
-		echo starting mattermost-postgres; \
-		docker run --name mattermost-postgres -p 5432:5432 \
-			-e POSTGRES_USER=mmuser \
-			-e POSTGRES_PASSWORD=mostest \
-			-e POSTGRES_DB=mattermost_test \
-			-d postgres:9.4 > /dev/null; \
-	elif [ $(shell docker ps --no-trunc --quiet --filter name=^/mattermost-postgres$$ | wc -l) -eq 0 ]; then \
-		echo restarting mattermost-postgres; \
-		docker start mattermost-postgres > /dev/null; \
-	fi
-
-	@if [ $(shell docker ps -a --no-trunc --quiet --filter name=^/mattermost-inbucket$$ | wc -l) -eq 0 ]; then \
-		echo starting mattermost-inbucket; \
-		docker run --name mattermost-inbucket -p 9000:10080 -p 2500:10025 -d jhillyerd/inbucket:release-1.2.0 > /dev/null; \
-	elif [ $(shell docker ps --no-trunc --quiet --filter name=^/mattermost-inbucket$$ | wc -l) -eq 0 ]; then \
-		echo restarting mattermost-inbucket; \
-		docker start mattermost-inbucket > /dev/null; \
-	fi
-
-	@if [ $(shell docker ps -a --no-trunc --quiet --filter name=^/mattermost-minio$$ | wc -l) -eq 0 ]; then \
-		echo starting mattermost-minio; \
-		docker run --name mattermost-minio -p 9001:9000 -e "MINIO_ACCESS_KEY=minioaccesskey" \
-		-e "MINIO_SSE_MASTER_KEY=my-minio-key:6368616e676520746869732070617373776f726420746f206120736563726574" \
-		-e "MINIO_SECRET_KEY=miniosecretkey" -d minio/minio:RELEASE.2019-04-23T23-50-36Z server /data > /dev/null; \
-		docker exec -it mattermost-minio /bin/sh -c "mkdir -p /data/mattermost-test" > /dev/null; \
-	elif [ $(shell docker ps --no-trunc --quiet --filter name=^/mattermost-minio$$ | wc -l) -eq 0 ]; then \
-		echo restarting mattermost-minio; \
-		docker start mattermost-minio > /dev/null; \
-	fi
-
-ifeq ($(BUILD_ENTERPRISE_READY),true)
-	@echo Ldap test user test.one
-	@if [ $(shell docker ps -a --no-trunc --quiet --filter name=^/mattermost-openldap$$ | wc -l) -eq 0 ]; then \
-		echo starting mattermost-openldap; \
-		docker run --name mattermost-openldap -p 389:389 -p 636:636 \
-			-e LDAP_TLS_VERIFY_CLIENT="never" \
-			-e LDAP_ORGANISATION="Mattermost Test" \
-			-e LDAP_DOMAIN="mm.test.com" \
-			-e LDAP_ADMIN_PASSWORD="mostest" \
-			-d osixia/openldap:1.2.2 > /dev/null;\
-		sleep 10; \
-		docker cp tests/test-data.ldif mattermost-openldap:/test-data.ldif;\
-		docker cp tests/qa-data.ldif mattermost-openldap:/qa-data.ldif;\
-		docker exec -ti mattermost-openldap bash -c 'ldapadd -x -D "cn=admin,dc=mm,dc=test,dc=com" -w mostest -f /$(LDAP_DATA)-data.ldif';\
-	elif [ $(shell docker ps | grep -ci mattermost-openldap) -eq 0 ]; then \
-		echo restarting mattermost-openldap; \
-		docker start mattermost-openldap > /dev/null; \
-		sleep 10; \
-	fi
-
-	@if [ $(shell docker ps -a --no-trunc --quiet --filter name=^/mattermost-elasticsearch$$ | wc -l) -eq 0 ]; then \
-		echo starting mattermost-elasticsearch; \
-		docker run --name mattermost-elasticsearch -p 9200:9200 -e "http.host=0.0.0.0" -e "transport.host=127.0.0.1" -e "ES_JAVA_OPTS=-Xms512m -Xmx512m" -d mattermost/mattermost-elasticsearch-docker:6.5.1 > /dev/null; \
-	elif [ $(shell docker ps --no-trunc --quiet --filter name=^/mattermost-elasticsearch$$ | wc -l) -eq 0 ]; then \
-		echo restarting mattermost-elasticsearch; \
-		docker start mattermost-elasticsearch> /dev/null; \
-	fi
-
-	@if [ $(shell docker ps -a --no-trunc --quiet --filter name=^/mattermost-redis$$ | wc -l) -eq 0 ]; then \
-		echo starting mattermost-redis; \
-		docker run --name mattermost-redis -p 6379:6379 -d redis > /dev/null; \
-	elif [ $(shell docker ps --no-trunc --quiet --filter name=^/mattermost-redis$$ | wc -l) -eq 0 ]; then \
-		echo restarting mattermost-redis; \
-		docker start mattermost-redis > /dev/null; \
-	fi
-endif
 else
 	@echo CI Build: skipping docker start
 endif
@@ -206,114 +130,29 @@ endif
 stop-docker: ## Stops the docker containers for local development.
 	@echo Stopping docker containers
 
-	@if [ $(shell docker ps -a --no-trunc --quiet --filter name=^/mattermost-mysql$$ | wc -l) -eq 1 ]; then \
-		echo stopping mattermost-mysql; \
-		docker stop mattermost-mysql > /dev/null; \
-	fi
+	docker-compose stop
 
-	@if [ $(shell docker ps -a --no-trunc --quiet --filter name=^/mattermost-mysql-unittest$$ | wc -l) -eq 1 ]; then \
-		echo stopping mattermost-mysql-unittest; \
-		docker stop mattermost-mysql-unittest > /dev/null; \
-	fi
-
-	@if [ $(shell docker ps -a --no-trunc --quiet --filter name=^/mattermost-postgres$$ | wc -l) -eq 1 ]; then \
-		echo stopping mattermost-postgres; \
-		docker stop mattermost-postgres > /dev/null; \
-	fi
-
-	@if [ $(shell docker ps -a --no-trunc --quiet --filter name=^/mattermost-postgres-unittest$$ | wc -l) -eq 1 ]; then \
-		echo stopping mattermost-postgres-unittest; \
-		docker stop mattermost-postgres-unittest > /dev/null; \
-	fi
-
-	@if [ $(shell docker ps -a --no-trunc --quiet --filter name=^/mattermost-openldap$$ | wc -l) -eq 1 ]; then \
-		echo stopping mattermost-openldap; \
-		docker stop mattermost-openldap > /dev/null; \
-	fi
-
-	@if [ $(shell docker ps -a --no-trunc --quiet --filter name=^/mattermost-inbucket$$ | wc -l) -eq 1 ]; then \
-		echo stopping mattermost-inbucket; \
-		docker stop mattermost-inbucket > /dev/null; \
-	fi
-
-		@if [ $(shell docker ps -a | grep -ci mattermost-minio) -eq 1 ]; then \
-		echo stopping mattermost-minio; \
-		docker stop mattermost-minio > /dev/null; \
-	fi
-
-	@if [ $(shell docker ps -a --no-trunc --quiet --filter name=^/mattermost-elasticsearch$$ | wc -l) -eq 1 ]; then \
-		echo stopping mattermost-elasticsearch; \
-		docker stop mattermost-elasticsearch > /dev/null; \
-	fi
-
-	@if [ $(shell docker ps -a --no-trunc --quiet --filter name=^/mattermost-redis$$ | wc -l) -eq 1 ]; then \
-		echo stopping mattermost-redis; \
-		docker stop mattermost-redis > /dev/null; \
-	fi
 
 clean-docker: ## Deletes the docker containers for local development.
 	@echo Removing docker containers
 
-	@if [ $(shell docker ps -a --no-trunc --quiet --filter name=^/mattermost-mysql$$ | wc -l) -eq 1 ]; then \
-		echo removing mattermost-mysql; \
-		docker stop mattermost-mysql > /dev/null; \
-		docker rm -v mattermost-mysql > /dev/null; \
-	fi
+	docker-compose down -v
+	docker-compose rm -v
 
-	@if [ $(shell docker ps -a --no-trunc --quiet --filter name=^/mattermost-mysql-unittest$$ | wc -l) -eq 1 ]; then \
-		echo removing mattermost-mysql-unittest; \
-		docker stop mattermost-mysql-unittest > /dev/null; \
-		docker rm -v mattermost-mysql-unittest > /dev/null; \
-	fi
-
-	@if [ $(shell docker ps -a --no-trunc --quiet --filter name=^/mattermost-postgres$$ | wc -l) -eq 1 ]; then \
-		echo removing mattermost-postgres; \
-		docker stop mattermost-postgres > /dev/null; \
-		docker rm -v mattermost-postgres > /dev/null; \
-	fi
-
-	@if [ $(shell docker ps -a --no-trunc --quiet --filter name=^/mattermost-postgres-unittest$$ | wc -l) -eq 1 ]; then \
-		echo removing mattermost-postgres-unittest; \
-		docker stop mattermost-postgres-unittest > /dev/null; \
-		docker rm -v mattermost-postgres-unittest > /dev/null; \
-	fi
-
-	@if [ $(shell docker ps -a | grep -ci mattermost-openldap) -eq 1 ]; then \
-		echo removing mattermost-openldap; \
-		docker stop mattermost-openldap > /dev/null; \
-		docker rm -v mattermost-openldap > /dev/null; \
-	fi
-
-	@if [ $(shell docker ps -a | grep -ci mattermost-inbucket) -eq 1 ]; then \
-		echo removing mattermost-inbucket; \
-		docker stop mattermost-inbucket > /dev/null; \
-		docker rm -v mattermost-inbucket > /dev/null; \
-	fi
-
-	@if [ $(shell docker ps -a | grep -ci mattermost-minio) -eq 1 ]; then \
-		echo removing mattermost-minio; \
-		docker stop mattermost-minio > /dev/null; \
-		docker rm -v mattermost-minio > /dev/null; \
-	fi
-
-	@if [ $(shell docker ps -a | grep -ci mattermost-elasticsearch) -eq 1 ]; then \
-		echo removing mattermost-elasticsearch; \
-		docker stop mattermost-elasticsearch > /dev/null; \
-		docker rm -v mattermost-elasticsearch > /dev/null; \
-	fi
 
 govet: ## Runs govet against all packages.
 	@echo Running GOVET
-	$(GO) get golang.org/x/tools/go/analysis/passes/shadow/cmd/shadow
+	env GO111MODULE=off $(GO) get golang.org/x/tools/go/analysis/passes/shadow/cmd/shadow
 	$(GO) vet $(GOFLAGS) $(ALL_PACKAGES) || exit 1
 	$(GO) vet -vettool=$(GOPATH)/bin/shadow $(GOFLAGS) $(ALL_PACKAGES) || exit 1
+	$(GO) run plugin/checker/main.go
 
 gofmt: ## Runs gofmt against all packages.
 	@echo Running GOFMT
 
 	@for package in $(TE_PACKAGES) $(EE_PACKAGES); do \
 		echo "Checking "$$package; \
-		files=$$(go list -f '{{range .GoFiles}}{{$$.Dir}}/{{.}} {{end}}' $$package); \
+		files=$$($(GO) list $(GOFLAGS) -f '{{range .GoFiles}}{{$$.Dir}}/{{.}} {{end}}' $$package); \
 		if [ "$$files" ]; then \
 			gofmt_output=$$(gofmt -d -s $$files 2>&1); \
 			if [ "$$gofmt_output" ]; then \
@@ -341,6 +180,9 @@ store-mocks: ## Creates mock files.
 	env GO111MODULE=off go get -u github.com/vektra/mockery/...
 	$(GOPATH)/bin/mockery -dir store -all -output store/storetest/mocks -note 'Regenerate this file using `make store-mocks`.'
 
+store-layers: ## Generate layers for the store
+	$(GO) generate $(GOFLAGS) ./store
+
 filesstore-mocks: ## Creates mock files.
 	env GO111MODULE=off go get -u github.com/vektra/mockery/...
 	$(GOPATH)/bin/mockery -dir services/filesstore -all -output services/filesstore/mocks -note 'Regenerate this file using `make filesstore-mocks`.'
@@ -360,7 +202,7 @@ einterfaces-mocks: ## Creates mock files for einterfaces.
 	$(GOPATH)/bin/mockery -dir einterfaces -all -output einterfaces/mocks -note 'Regenerate this file using `make einterfaces-mocks`.'
 
 pluginapi: ## Generates api and hooks glue code for plugins
-	go generate ./plugin
+	$(GO) generate $(GOFLAGS) ./plugin
 
 check-licenses: ## Checks license status.
 	./scripts/license-check.sh $(TE_PACKAGES) $(EE_PACKAGES)
@@ -409,14 +251,14 @@ do-cover-file: ## Creates the test coverage report file.
 go-junit-report:
 	env GO111MODULE=off go get -u github.com/jstemmer/go-junit-report
 
-test-compile:
+test-compile: ## Compile tests.
 	@echo COMPILE TESTS
 
 	for package in $(TE_PACKAGES) $(EE_PACKAGES); do \
 		$(GO) test $(GOFLAGS) -c $$package; \
 	done
 
-test-db-migration: start-docker
+test-db-migration: start-docker ## Gets diff of upgrade vs new instance schemas.
 	./scripts/mysql-migration-test.sh
 	./scripts/psql-migration-test.sh
 
@@ -475,7 +317,7 @@ run-server: validate-go-version start-docker ## Starts the server.
 	$(GO) run $(GOFLAGS) -ldflags '$(LDFLAGS)' $(PLATFORM_FILES) --disableconfigwatch | \
 	    $(GO) run $(GOFLAGS) -ldflags '$(LDFLAGS)' $(PLATFORM_FILES) logs --logrus &
 
-debug-server: start-docker
+debug-server: start-docker ## Compile and start server using delve.
 	mkdir -p $(BUILD_WEBAPP_DIR)/dist/files
 	$(DELVE) debug $(PLATFORM_FILES) --build-flags="-ldflags '\
 		-X github.com/mattermost/mattermost-server/model.BuildNumber=$(BUILD_NUMBER)\
@@ -484,7 +326,7 @@ debug-server: start-docker
 		-X github.com/mattermost/mattermost-server/model.BuildHashEnterprise=$(BUILD_HASH_ENTERPRISE)\
 		-X github.com/mattermost/mattermost-server/model.BuildEnterpriseReady=$(BUILD_ENTERPRISE_READY)'"
 
-debug-server-headless: start-docker
+debug-server-headless: start-docker ## Debug server from within an IDE like VSCode or IntelliJ.
 	mkdir -p $(BUILD_WEBAPP_DIR)/dist/files
 	$(DELVE) debug --headless --listen=:2345 --api-version=2 --accept-multiclient $(PLATFORM_FILES) --build-flags="-ldflags '\
 		-X github.com/mattermost/mattermost-server/model.BuildNumber=$(BUILD_NUMBER)\
@@ -521,11 +363,11 @@ ifeq ($(BUILDER_GOOS_GOARCH),"windows_amd64")
 	wmic process where "Caption='go.exe' and CommandLine like '%go.exe run%'" call terminate
 	wmic process where "Caption='mattermost.exe' and CommandLine like '%go-build%'" call terminate
 else
-	@for PID in $$(ps -ef | grep "[g]o run" | awk '{ print $$2 }'); do \
+	@for PID in $$(ps -ef | grep "[g]o run" | grep "disableconfigwatch" | awk '{ print $$2 }'); do \
 		echo stopping go $$PID; \
 		kill $$PID; \
 	done
-	@for PID in $$(ps -ef | grep "[g]o-build" | awk '{ print $$2 }'); do \
+	@for PID in $$(ps -ef | grep "[g]o-build" | grep "disableconfigwatch" | awk '{ print $$2 }'); do \
 		echo stopping mattermost $$PID; \
 		kill $$PID; \
 	done
@@ -551,7 +393,7 @@ run-job-server: ## Runs the background job server.
 config-ldap: ## Configures LDAP.
 	@echo Setting up configuration for local LDAP
 
-	@sed -i'' -e 's|"LdapServer": ".*"|"LdapServer": "dockerhost"|g' config/config.json
+	@sed -i'' -e 's|"LdapServer": ".*"|"LdapServer": "localhost"|g' config/config.json
 	@sed -i'' -e 's|"BaseDN": ".*"|"BaseDN": "dc=mm,dc=test,dc=com"|g' config/config.json
 	@sed -i'' -e 's|"BindUsername": ".*"|"BindUsername": "cn=admin,dc=mm,dc=test,dc=com"|g' config/config.json
 	@sed -i'' -e 's|"BindPassword": ".*"|"BindPassword": "mostest"|g' config/config.json
@@ -568,7 +410,10 @@ config-ldap: ## Configures LDAP.
 config-reset: ## Resets the config/config.json file to the default.
 	@echo Resetting configuration to default
 	rm -f config/config.json
-	OUTPUT_CONFIG=$(PWD)/config/config.json go generate ./config
+	OUTPUT_CONFIG=$(PWD)/config/config.json $(GO) generate $(GOFLAGS) ./config
+
+diff-config: ## Compares default configuration between two mattermost versions
+	@./scripts/diff-config.sh
 
 clean: stop-docker ## Clean up everything except persistant server data.
 	@echo Cleaning
@@ -629,4 +474,4 @@ endif
 
 ## Help documentatin à la https://marmelab.com/blog/2016/02/29/auto-documented-makefile.html
 help:
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' ./Makefile | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[0-9a-zA-Z_-]+:.*?## .*$$' ./Makefile | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'

@@ -172,6 +172,10 @@
     "translation": "请加我到您想要我互动的团队与频道。使用浏览器或桌面应用进行操作。"
   },
   {
+    "id": "api.channel.add_guest.added",
+    "translation": "%v 由 %v 邀请加入频道。"
+  },
+  {
     "id": "api.channel.add_member.added",
     "translation": "%v 由 %v 邀请加入频道。"
   },
@@ -258,6 +262,10 @@
   {
     "id": "api.channel.delete_channel.type.invalid",
     "translation": "无法删除私信或组消息频道"
+  },
+  {
+    "id": "api.channel.guest_join_channel.post_and_forget",
+    "translation": "%v 以游客身份加入此频道。"
   },
   {
     "id": "api.channel.join_channel.permissions.app_error",
@@ -378,6 +386,10 @@
   {
     "id": "api.channel.update_channel_member_roles.scheme_role.app_error",
     "translation": "提供的角色由方案管理，因此无法直接应用到频道成员"
+  },
+  {
+    "id": "api.channel.update_channel_privacy.default_channel_error",
+    "translation": "默认频道无法改为私有。"
   },
   {
     "id": "api.channel.update_channel_scheme.license.error",
@@ -960,7 +972,7 @@
   },
   {
     "id": "api.command_remove.group_constrained_user_denied",
-    "translation": "用户不能从此频道移除因为他们属于连接到此频道的组。如果想从此频道移除他们，必须从连动组里移除。"
+    "translation": "用户不能从此频道移除因为他们属于关联到此频道的组。如果想从此频道移除他们，必须从关联组里移除。"
   },
   {
     "id": "api.command_remove.hint",
@@ -1526,11 +1538,11 @@
   },
   {
     "id": "api.post.check_for_out_of_channel_groups_mentions.message.multiple",
-    "translation": "@{{.Usernames}} 以及 @{{.LastUsername}} 未被通知因为他们不在此频道。他们未能被添加到频道因为他们不是连动组的成员。他们必须添加到连动组才能添加到此频道。"
+    "translation": "@{{.Usernames}} 以及 @{{.LastUsername}} 未被通知因为他们不在此频道。他们未能被添加到频道因为他们不是关联组的成员。他们必须添加到关联组才能添加到此频道。"
   },
   {
     "id": "api.post.check_for_out_of_channel_groups_mentions.message.one",
-    "translation": "@{{.Username}} 未被通知因为他不在此频道。他们未能被添加到频道因为他们不是连动组的成员。他们必须添加到连动组才能添加到此频道。"
+    "translation": "@{{.Username}} 未被通知因为他不在此频道。他们未能被添加到频道因为他们不是关联组的成员。他们必须添加到关联组才能添加到此频道。"
   },
   {
     "id": "api.post.check_for_out_of_channel_mentions.message.multiple",
@@ -1863,6 +1875,18 @@
     "translation": "添加用户到团队所需的参数。"
   },
   {
+    "id": "api.team.add_user_to_team_from_invite.guest.app_error",
+    "translation": "游客不能使用邀请链接加入团队。请申请使用游客邮件邀请加入团队."
+  },
+  {
+    "id": "api.team.demote_user_to_guest.disabled.error",
+    "translation": "游客帐号已停用。"
+  },
+  {
+    "id": "api.team.demote_user_to_guest.license.error",
+    "translation": "您的许可证不支持游客帐号"
+  },
+  {
     "id": "api.team.get_invite_info.not_open_team",
     "translation": "不能邀请进入非开放团队。"
   },
@@ -1907,16 +1931,24 @@
     "translation": "作废邮件邀请错误。"
   },
   {
+    "id": "api.team.invate_guests_to_channels.disabled.error",
+    "translation": "游客帐号已停用"
+  },
+  {
+    "id": "api.team.invate_guests_to_channels.license.error",
+    "translation": "您的许可证不支持游客帐号"
+  },
+  {
+    "id": "api.team.invite_guests.channel_in_invalid_team.app_error",
+    "translation": "邀请到的频道必须属于团队。"
+  },
+  {
     "id": "api.team.invite_members.disabled.app_error",
     "translation": "邮件邀请已停用。"
   },
   {
     "id": "api.team.invite_members.invalid_email.app_error",
     "translation": "以下邮箱地址不在允许的域名范围内：{{.Addresses}}。请联系您的系统管理员了解详情。"
-  },
-  {
-    "id": "api.team.invite_members.member",
-    "translation": "成员"
   },
   {
     "id": "api.team.invite_members.no_one.app_error",
@@ -1949,6 +1981,14 @@
   {
     "id": "api.team.move_channel.success",
     "translation": "此频道已从 %v 移至此团队。"
+  },
+  {
+    "id": "api.team.promote_guest_to_user.disabled.error",
+    "translation": "游客帐号已停用。"
+  },
+  {
+    "id": "api.team.promote_guest_to_user.license.error",
+    "translation": "您的许可证不支持游客帐号"
   },
   {
     "id": "api.team.remove_member.group_constrained.app_error",
@@ -2112,11 +2152,19 @@
   },
   {
     "id": "api.templates.invite_body.info",
-    "translation": "团队 {{.SenderStatus}} [[{{.SenderName}}]] 邀请您加入 [[{{.TeamDisplayName}}]]。"
+    "translation": "[[{{.SenderName}}]]，邀请您加入 [[{{.TeamDisplayName}}]]。"
   },
   {
     "id": "api.templates.invite_body.title",
     "translation": "您已经被邀请"
+  },
+  {
+    "id": "api.templates.invite_body_guest.info",
+    "translation": "[[{{.SenderName}}]]，邀请您以游客加入团队 [[{{.TeamDisplayName}}]]。"
+  },
+  {
+    "id": "api.templates.invite_guest_subject",
+    "translation": "[{{ .SiteName }}] {{ .SenderName }} 邀请您以游客加入团队 {{ .TeamDisplayName }}"
   },
   {
     "id": "api.templates.invite_subject",
@@ -2367,6 +2415,18 @@
     "translation": "用户创建已停用。"
   },
   {
+    "id": "api.user.create_user.guest_accounts.disabled.app_error",
+    "translation": "游客帐号已停用"
+  },
+  {
+    "id": "api.user.create_user.guest_accounts.license.app_error",
+    "translation": "您的许可证不支持游客帐号"
+  },
+  {
+    "id": "api.user.create_user.invalid_invitation_type.app_error",
+    "translation": "无法创建用户，无效的邀请。"
+  },
+  {
     "id": "api.user.create_user.no_open_server",
     "translation": "这个服务员不允许注册。请与管理员联系，获取邀请。"
   },
@@ -2381,6 +2441,10 @@
   {
     "id": "api.user.create_user.signup_link_invalid.app_error",
     "translation": "注册链接无效"
+  },
+  {
+    "id": "api.user.demote_user_to_guest.already_guest.app_error",
+    "translation": "无法转换该用户至游客因为他已经是游客"
   },
   {
     "id": "api.user.email_to_ldap.not_available.app_error",
@@ -2423,6 +2487,14 @@
     "translation": "尝试使用实验功能 ClientSideCert 登入但未拥有有效的企业许可证"
   },
   {
+    "id": "api.user.login.guest_accounts.disabled.error",
+    "translation": "游客帐号已停用"
+  },
+  {
+    "id": "api.user.login.guest_accounts.license.error",
+    "translation": "您的许可证不支持游客帐号"
+  },
+  {
     "id": "api.user.login.inactive.app_error",
     "translation": "您的帐号因被停用而登入失败。请联系系统管理员。"
   },
@@ -2436,7 +2508,7 @@
   },
   {
     "id": "api.user.login.invalid_credentials_sso",
-    "translation": "输入有效的邮箱、用户名以及密码，或使用其他方式登入。\n"
+    "translation": "输入有效的邮箱、用户名以及密码，或使用其他方式登入。"
   },
   {
     "id": "api.user.login.invalid_credentials_username",
@@ -2473,6 +2545,10 @@
   {
     "id": "api.user.oauth_to_email.not_available.app_error",
     "translation": "此服务器未配置验证转移。"
+  },
+  {
+    "id": "api.user.promote_guest_to_user.no_guest.app_error",
+    "translation": "无法转换该游客至普通用户因为他不是游客"
   },
   {
     "id": "api.user.reset_password.broken_token.app_error",
@@ -2587,6 +2663,14 @@
     "translation": "更新密码失败，因为我们无法找到有效的帐户"
   },
   {
+    "id": "api.user.update_user.accepted_domain.app_error",
+    "translation": "您提供的电子邮件不属于允许的域名。请与您的管理员联系或使用一个不同的电子邮件注册。"
+  },
+  {
+    "id": "api.user.update_user.accepted_guest_domain.app_error",
+    "translation": "您提供的电子邮件不属于游客允许的域名。请与您的管理员联系或使用一个不同的电子邮件注册。"
+  },
+  {
     "id": "api.user.upload_profile_user.array.app_error",
     "translation": "根据“图像”请求的空数组"
   },
@@ -2697,6 +2781,10 @@
   {
     "id": "app.admin.test_email.failure",
     "translation": "连接失败：{{.Error}}"
+  },
+  {
+    "id": "app.admin.test_site_url.failure",
+    "translation": "不是有效的网址"
   },
   {
     "id": "app.channel.create_channel.no_team_id.app_error",
@@ -3296,7 +3384,7 @@
   },
   {
     "id": "app.notification.body.intro.direct.generic",
-    "translation": "您有来自 @{{.SenderName}} 的新私信"
+    "translation": "您有来自 {{.SenderName}} 的新私信"
   },
   {
     "id": "app.notification.body.intro.group_message.full",
@@ -3304,7 +3392,7 @@
   },
   {
     "id": "app.notification.body.intro.group_message.generic",
-    "translation": "您有来自 @{{.SenderName}} 的新团体消息"
+    "translation": "您有来自 {{.SenderName}} 的新团体消息"
   },
   {
     "id": "app.notification.body.intro.notification.full",
@@ -3312,11 +3400,11 @@
   },
   {
     "id": "app.notification.body.intro.notification.generic",
-    "translation": "您有来自 @{{.SenderName}} 的新通知"
+    "translation": "您有来自 {{.SenderName}} 的新通知"
   },
   {
     "id": "app.notification.body.text.direct.full",
-    "translation": "@{{.SenderName}} - {{.Hour}}:{{.Minute}} {{.TimeZone}}, {{.Month}} {{.Day}}"
+    "translation": "{{.SenderName}} - {{.Hour}}:{{.Minute}} {{.TimeZone}}, {{.Month}} {{.Day}}"
   },
   {
     "id": "app.notification.body.text.direct.generic",
@@ -3328,7 +3416,7 @@
   },
   {
     "id": "app.notification.body.text.group_message.full2",
-    "translation": "@{{.SenderName}} - {{.Hour}}:{{.Minute}} {{.TimeZone}}, {{.Month}} {{.Day}}"
+    "translation": "{{.SenderName}} - {{.Hour}}:{{.Minute}} {{.TimeZone}}, {{.Month}} {{.Day}}"
   },
   {
     "id": "app.notification.body.text.group_message.generic",
@@ -3340,7 +3428,7 @@
   },
   {
     "id": "app.notification.body.text.notification.full2",
-    "translation": "@{{.SenderName}} - {{.Hour}}:{{.Minute}} {{.TimeZone}}, {{.Month}} {{.Day}}"
+    "translation": "{{.SenderName}} - {{.Hour}}:{{.Minute}} {{.TimeZone}}, {{.Month}} {{.Day}}"
   },
   {
     "id": "app.notification.body.text.notification.generic",
@@ -3421,6 +3509,22 @@
   {
     "id": "app.plugin.manifest.app_error",
     "translation": "无法在解压的插件里找到 manifest 档"
+  },
+  {
+    "id": "app.plugin.marketplace_client.app_error",
+    "translation": "创建集市客户端失败。"
+  },
+  {
+    "id": "app.plugin.marketplace_disabled.app_error",
+    "translation": "集市已停用。请检查您的日志了解详情。"
+  },
+  {
+    "id": "app.plugin.marketplace_plugins.app_error",
+    "translation": "从集市服务器获取插件失败。"
+  },
+  {
+    "id": "app.plugin.marshal.app_error",
+    "translation": "封装集市插件失败。"
   },
   {
     "id": "app.plugin.mvdir.app_error",
@@ -4092,7 +4196,7 @@
   },
   {
     "id": "mfa.validate_token.authenticate.app_error",
-    "translation": "尝试验证多重验证令牌时出现错误"
+    "translation": "无效的多重验证令牌。"
   },
   {
     "id": "migrations.worker.run_advanced_permissions_phase_2_migration.invalid_progress",
@@ -4416,7 +4520,11 @@
   },
   {
     "id": "model.config.is_valid.elastic_search.connection_url.app_error",
-    "translation": "当 Elastic Search 索引开启时必须提供 Elastic Search ConnectionUrl 设定。"
+    "translation": "当 Elasticsearch 索引开启时必须提供 Elasticsearch ConnectionUrl 设定。"
+  },
+  {
+    "id": "model.config.is_valid.elastic_search.enable_autocomplete.app_error",
+    "translation": "当 Elasticsearch AutocompleteEnabled 设为是时必须设定 Elasticsearch IndexingEnabled 为是。"
   },
   {
     "id": "model.config.is_valid.elastic_search.enable_autocomplete.app_error",
@@ -4424,7 +4532,7 @@
   },
   {
     "id": "model.config.is_valid.elastic_search.enable_searching.app_error",
-    "translation": "当 Elastic Search SearchEnabled 设为是时必须设定 Elastic Search IndexingEnabled 为是。"
+    "translation": "当 Elasticsearch SearchEnabled 设为是时必须设定 Elasticsearch IndexingEnabled 为是。"
   },
   {
     "id": "model.config.is_valid.elastic_search.live_indexing_batch_size.app_error",
@@ -4809,6 +4917,22 @@
   {
     "id": "model.group_syncable.type.app_error",
     "translation": "无效的可同步组类型属性"
+  },
+  {
+    "id": "model.guest.is_valid.channel.app_error",
+    "translation": "无效的频道"
+  },
+  {
+    "id": "model.guest.is_valid.channels.app_error",
+    "translation": "无效的频道"
+  },
+  {
+    "id": "model.guest.is_valid.email.app_error",
+    "translation": "无效的邮箱"
+  },
+  {
+    "id": "model.guest.is_valid.emails.app_error",
+    "translation": "无效的邮箱"
   },
   {
     "id": "model.incoming_hook.channel_id.app_error",
@@ -5567,6 +5691,10 @@
     "translation": "无法获取频道"
   },
   {
+    "id": "store.sql_channel.get_pinnedpost_count.app_error",
+    "translation": "无法获得该频道指定消息数"
+  },
+  {
     "id": "store.sql_channel.get_public_channels.get.app_error",
     "translation": "无法获取公开频道"
   },
@@ -6255,10 +6383,6 @@
     "translation": "无法删除该用户被选择的信息(数量太多)，请重新运行"
   },
   {
-    "id": "store.sql_post.query_max_post_size.error",
-    "translation": "无法判断最大支持的消息大小"
-  },
-  {
     "id": "store.sql_post.save.app_error",
     "translation": "无法保存消息"
   },
@@ -6301,10 +6425,6 @@
   {
     "id": "store.sql_preference.insert.save.app_error",
     "translation": "无法保存偏好"
-  },
-  {
-    "id": "store.sql_preference.is_feature_enabled.app_error",
-    "translation": "我们查找一个预发布偏好设置时出现问题"
   },
   {
     "id": "store.sql_preference.permanent_delete_by_user.app_error",
@@ -6523,6 +6643,10 @@
     "translation": "无法更新 last_activity_at"
   },
   {
+    "id": "store.sql_session.update_props.app_error",
+    "translation": "无法更新会话属性"
+  },
+  {
     "id": "store.sql_session.update_roles.app_error",
     "translation": "无法更新角色"
   },
@@ -6533,18 +6657,6 @@
   {
     "id": "store.sql_status.get.missing.app_error",
     "translation": "该状态没有对应的数据"
-  },
-  {
-    "id": "store.sql_status.get_online.app_error",
-    "translation": "获取所有在线状态时发生错误"
-  },
-  {
-    "id": "store.sql_status.get_online_away.app_error",
-    "translation": "获取所有在线/离开状态时遇到错误"
-  },
-  {
-    "id": "store.sql_status.get_team_statuses.app_error",
-    "translation": "获取所有团队成员状态时遇到错误"
   },
   {
     "id": "store.sql_status.get_total_active_users_count.app_error",
@@ -6589,6 +6701,14 @@
   {
     "id": "store.sql_team.analytics_get_team_count_for_scheme.app_error",
     "translation": "无法从方案获取频道数。"
+  },
+  {
+    "id": "store.sql_team.analytics_private_team_count.app_error",
+    "translation": "无法统计私有团队数"
+  },
+  {
+    "id": "store.sql_team.analytics_public_team_count.app_error",
+    "translation": "无法统计公开团队数"
   },
   {
     "id": "store.sql_team.analytics_team_count.app_error",
@@ -6644,6 +6764,10 @@
   },
   {
     "id": "store.sql_team.get_by_name.app_error",
+    "translation": "未找到现有的团队"
+  },
+  {
+    "id": "store.sql_team.get_by_name.missing.app_error",
     "translation": "未找到现有的团队"
   },
   {
@@ -6755,10 +6879,6 @@
     "translation": "我们更新该团队时遇到一个错误"
   },
   {
-    "id": "store.sql_team.update_display_name.app_error",
-    "translation": "无法更新团队名称"
-  },
-  {
     "id": "store.sql_team.update_last_team_icon_update.app_error",
     "translation": "无法更新团队图标更新日期"
   },
@@ -6817,6 +6937,26 @@
   {
     "id": "store.sql_user.count.app_error",
     "translation": "UserCountOptions 不正常"
+  },
+  {
+    "id": "store.sql_user.demote_user_to_guest.channel_members_update.app_error",
+    "translation": "更新频道成员失败"
+  },
+  {
+    "id": "store.sql_user.demote_user_to_guest.commit_transaction.app_error",
+    "translation": "提交数据库事务失败"
+  },
+  {
+    "id": "store.sql_user.demote_user_to_guest.open_transaction.app_error",
+    "translation": "开始数据库事务失败"
+  },
+  {
+    "id": "store.sql_user.demote_user_to_guest.team_members_update.app_error",
+    "translation": "更新团队成员失败"
+  },
+  {
+    "id": "store.sql_user.demote_user_to_guest.user_update.app_error",
+    "translation": "更新用户失败"
   },
   {
     "id": "store.sql_user.get.app_error",
@@ -6897,6 +7037,26 @@
   {
     "id": "store.sql_user.permanent_delete.app_error",
     "translation": "无法删除现有的帐号"
+  },
+  {
+    "id": "store.sql_user.promote_guest.channel_members_update.app_error",
+    "translation": "更新频道成员失败"
+  },
+  {
+    "id": "store.sql_user.promote_guest.commit_transaction.app_error",
+    "translation": "提交数据库事务失败"
+  },
+  {
+    "id": "store.sql_user.promote_guest.open_transaction.app_error",
+    "translation": "开始数据库事务失败"
+  },
+  {
+    "id": "store.sql_user.promote_guest.team_members_update.app_error",
+    "translation": "更新频道成员失败"
+  },
+  {
+    "id": "store.sql_user.promote_guest.user_update.app_error",
+    "translation": "更新用户失败"
   },
   {
     "id": "store.sql_user.save.app_error",
@@ -7223,12 +7383,100 @@
     "translation": "无法解析传入数据"
   },
   {
-    "id": "web.error.unsupported_browser.message",
-    "translation": "您当前的浏览器不支持。请升级到以下浏览器："
+    "id": "web.error.unsupported_browser.browser_get_latest.chrome",
+    "translation": "获取最新的 Chrome 浏览器"
   },
   {
-    "id": "web.error.unsupported_browser.title",
-    "translation": "不支持的浏览器"
+    "id": "web.error.unsupported_browser.browser_get_latest.firefox",
+    "translation": "获取最新的火狐浏览器"
+  },
+  {
+    "id": "web.error.unsupported_browser.browser_get_latest.safari",
+    "translation": "获取最新的 Safari 浏览器"
+  },
+  {
+    "id": "web.error.unsupported_browser.browser_title.chrome",
+    "translation": "Google Chrome"
+  },
+  {
+    "id": "web.error.unsupported_browser.browser_title.edge",
+    "translation": "Microsoft Edge"
+  },
+  {
+    "id": "web.error.unsupported_browser.browser_title.firefox",
+    "translation": "火狐"
+  },
+  {
+    "id": "web.error.unsupported_browser.browser_title.safari",
+    "translation": "Safari"
+  },
+  {
+    "id": "web.error.unsupported_browser.download",
+    "translation": "下载应用"
+  },
+  {
+    "id": "web.error.unsupported_browser.download_app_or_upgrade_browser",
+    "translation": "下载 Mattermost 应用或使用支持的浏览器以获得更好的体验。"
+  },
+  {
+    "id": "web.error.unsupported_browser.download_the_app",
+    "translation": "下载应用"
+  },
+  {
+    "id": "web.error.unsupported_browser.install_guide.mac",
+    "translation": "安装说明"
+  },
+  {
+    "id": "web.error.unsupported_browser.install_guide.windows",
+    "translation": "安装说明"
+  },
+  {
+    "id": "web.error.unsupported_browser.learn_more",
+    "translation": "了解更多关于支持的浏览器。"
+  },
+  {
+    "id": "web.error.unsupported_browser.min_browser_version.chrome",
+    "translation": "版本 61+"
+  },
+  {
+    "id": "web.error.unsupported_browser.min_browser_version.edge",
+    "translation": "版本 44+"
+  },
+  {
+    "id": "web.error.unsupported_browser.min_browser_version.firefox",
+    "translation": "版本 60+"
+  },
+  {
+    "id": "web.error.unsupported_browser.min_browser_version.safari",
+    "translation": "版本 12+"
+  },
+  {
+    "id": "web.error.unsupported_browser.min_os_version.mac",
+    "translation": "macOS 10.9+"
+  },
+  {
+    "id": "web.error.unsupported_browser.min_os_version.windows",
+    "translation": "Windows 7+"
+  },
+  {
+    "id": "web.error.unsupported_browser.no_longer_support",
+    "translation": "我们不再支持此浏览器"
+  },
+  {
+    "id": "web.error.unsupported_browser.no_longer_support_version",
+    "translation": "我们不再支持此浏览器版本"
+  },
+  {
+    "id": "web.error.unsupported_browser.open_system_browser.edge",
+    "translation": "打开 Edge"
+  },
+  {
+    "id": "web.error.unsupported_browser.system_browser_make_default",
+    "translation": "设为默认"
+  },
+  {
+    "id": "web.error.unsupported_browser.system_browser_or",
+    "translation": "或"
   },
   {
     "id": "web.get_access_token.internal_saving.app_error",

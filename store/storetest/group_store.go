@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -583,6 +584,8 @@ func testUpsertMember(t *testing.T, ss store.Store) {
 	require.Zero(t, d2.DeleteAt)
 
 	// Duplicate composite key (GroupId, UserId)
+	// Ensure new CreateAt > previous CreateAt for the same (groupId, userId)
+	time.Sleep(1 * time.Millisecond)
 	_, err = ss.Group().UpsertMember(group.Id, user.Id)
 	require.Nil(t, err)
 
@@ -591,6 +594,8 @@ func testUpsertMember(t *testing.T, ss store.Store) {
 	require.Equal(t, err.Id, "store.insert_error")
 
 	// Restores a deleted member
+	// Ensure new CreateAt > previous CreateAt for the same (groupId, userId)
+	time.Sleep(1 * time.Millisecond)
 	_, err = ss.Group().UpsertMember(group.Id, user.Id)
 	require.Nil(t, err)
 
@@ -1064,11 +1069,11 @@ func testPendingAutoAddTeamMembers(t *testing.T, ss store.Store) {
 	require.Len(t, teamMembers, 1)
 
 	// adding team membership stops returning result
-	res := <-ss.Team().SaveMember(&model.TeamMember{
+	_, err = ss.Team().SaveMember(&model.TeamMember{
 		TeamId: team.Id,
 		UserId: user.Id,
 	}, 999)
-	require.Nil(t, res.Err)
+	require.Nil(t, err)
 	teamMembers, err = ss.Group().TeamMembersToAdd(0)
 	require.Nil(t, err)
 	require.Len(t, teamMembers, 0)
@@ -1519,11 +1524,11 @@ func pendingMemberRemovalsDataSetup(t *testing.T, ss store.Store) *removalsData 
 	}
 
 	for _, item := range userIDTeamIDs {
-		res := <-ss.Team().SaveMember(&model.TeamMember{
+		_, err = ss.Team().SaveMember(&model.TeamMember{
 			UserId: item[0],
 			TeamId: item[1],
 		}, 99)
-		require.Nil(t, res.Err)
+		require.Nil(t, err)
 	}
 
 	// add users to channels
@@ -1537,12 +1542,12 @@ func pendingMemberRemovalsDataSetup(t *testing.T, ss store.Store) *removalsData 
 	}
 
 	for _, item := range userIDChannelIDs {
-		res := <-ss.Channel().SaveMember(&model.ChannelMember{
+		_, err := ss.Channel().SaveMember(&model.ChannelMember{
 			UserId:      item[0],
 			ChannelId:   item[1],
 			NotifyProps: model.GetDefaultChannelNotifyProps(),
 		})
-		require.Nil(t, res.Err)
+		require.Nil(t, err)
 	}
 
 	return &removalsData{
@@ -2287,8 +2292,8 @@ func testTeamMembersMinusGroupMembers(t *testing.T, ss store.Store) {
 		users = append(users, user)
 
 		trueOrFalse := int(math.Mod(float64(i), 2)) == 0
-		res := <-ss.Team().SaveMember(&model.TeamMember{TeamId: team.Id, UserId: user.Id, SchemeUser: trueOrFalse, SchemeAdmin: !trueOrFalse}, 999)
-		require.Nil(t, res.Err)
+		_, err = ss.Team().SaveMember(&model.TeamMember{TeamId: team.Id, UserId: user.Id, SchemeUser: trueOrFalse, SchemeAdmin: !trueOrFalse}, 999)
+		require.Nil(t, err)
 	}
 
 	// Extra user outside of the group member users.
@@ -2299,8 +2304,8 @@ func testTeamMembersMinusGroupMembers(t *testing.T, ss store.Store) {
 	user, err = ss.User().Save(user)
 	require.Nil(t, err)
 	users = append(users, user)
-	res := <-ss.Team().SaveMember(&model.TeamMember{TeamId: team.Id, UserId: user.Id, SchemeUser: true, SchemeAdmin: false}, 999)
-	require.Nil(t, res.Err)
+	_, err = ss.Team().SaveMember(&model.TeamMember{TeamId: team.Id, UserId: user.Id, SchemeUser: true, SchemeAdmin: false}, 999)
+	require.Nil(t, err)
 
 	for i := 0; i < numberOfGroups; i++ {
 		group := &model.Group{
@@ -2439,14 +2444,14 @@ func testChannelMembersMinusGroupMembers(t *testing.T, ss store.Store) {
 		users = append(users, user)
 
 		trueOrFalse := int(math.Mod(float64(i), 2)) == 0
-		res := <-ss.Channel().SaveMember(&model.ChannelMember{
+		_, err = ss.Channel().SaveMember(&model.ChannelMember{
 			ChannelId:   channel.Id,
 			UserId:      user.Id,
 			SchemeUser:  trueOrFalse,
 			SchemeAdmin: !trueOrFalse,
 			NotifyProps: model.GetDefaultChannelNotifyProps(),
 		})
-		require.Nil(t, res.Err)
+		require.Nil(t, err)
 	}
 
 	// Extra user outside of the group member users.
@@ -2456,14 +2461,14 @@ func testChannelMembersMinusGroupMembers(t *testing.T, ss store.Store) {
 	})
 	require.Nil(t, err)
 	users = append(users, user)
-	res := <-ss.Channel().SaveMember(&model.ChannelMember{
+	_, err = ss.Channel().SaveMember(&model.ChannelMember{
 		ChannelId:   channel.Id,
 		UserId:      user.Id,
 		SchemeUser:  true,
 		SchemeAdmin: false,
 		NotifyProps: model.GetDefaultChannelNotifyProps(),
 	})
-	require.Nil(t, res.Err)
+	require.Nil(t, err)
 
 	for i := 0; i < numberOfGroups; i++ {
 		group := &model.Group{

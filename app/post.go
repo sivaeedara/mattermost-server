@@ -75,7 +75,12 @@ func (a *App) CreatePostAsUser(post *model.Post, currentSessionId string) (*mode
 	// Update the LastViewAt only if the post does not have from_webhook prop set (eg. Zapier app)
 	if _, ok := post.Props["from_webhook"]; !ok {
 		if _, err := a.MarkChannelsAsViewed([]string{post.ChannelId}, post.UserId, currentSessionId); err != nil {
-			mlog.Error(fmt.Sprintf("Encountered error updating last viewed, channel_id=%s, user_id=%s, err=%v", post.ChannelId, post.UserId, err))
+			mlog.Error(
+				"Encountered error updating last viewed",
+				mlog.String("channel_id", post.ChannelId),
+				mlog.String("user_id", post.UserId),
+				mlog.Err(err),
+			)
 		}
 	}
 
@@ -158,9 +163,9 @@ func (a *App) CreatePost(post *model.Post, channel *model.Channel, triggerWebhoo
 
 	post.SanitizeProps()
 
-	var pchan store.StoreChannel
+	var pchan chan store.StoreResult
 	if len(post.RootId) > 0 {
-		pchan = make(store.StoreChannel, 1)
+		pchan = make(chan store.StoreResult, 1)
 		go func() {
 			r, pErr := a.Srv.Store.Post().Get(post.RootId)
 			pchan <- store.StoreResult{Data: r, Err: pErr}
@@ -228,7 +233,7 @@ func (a *App) CreatePost(post *model.Post, channel *model.Channel, triggerWebhoo
 			post.Props["attachments"] = attachmentsInterface
 		}
 		if err != nil {
-			mlog.Error("Could not convert post attachments to map interface, err=%s" + err.Error())
+			mlog.Error("Could not convert post attachments to map interface.", mlog.Err(err))
 		}
 	}
 
@@ -393,6 +398,13 @@ func (a *App) handlePostEvents(post *model.Post, user *model.User, channel *mode
 		return err
 	}
 
+	a.Srv.Go(func() {
+		_, err := a.SendAutoResponseIfNecessary(channel, user)
+		if err != nil {
+			mlog.Error("Failed to send auto response", mlog.String("user_id", user.Id), mlog.String("post_id", post.Id), mlog.Err(err))
+		}
+	})
+
 	if triggerWebhooks {
 		a.Srv.Go(func() {
 			if err := a.handleWebhookEvents(post, team, channel, user); err != nil {
@@ -556,7 +568,7 @@ func (a *App) UpdatePost(post *model.Post, safeUpdate bool) (*model.Post, *model
 		a.Srv.Go(func() {
 			channel, chanErr := a.Srv.Store.Channel().GetForPost(rpost.Id)
 			if chanErr != nil {
-				mlog.Error(fmt.Sprintf("Couldn't get channel %v for post %v for Elasticsearch indexing.", rpost.ChannelId, rpost.Id))
+				mlog.Error("Couldn't get channel for post for Elasticsearch indexing.", mlog.String("channel_id", rpost.ChannelId), mlog.String("post_id", rpost.Id))
 				return
 			}
 			if err := a.Elasticsearch.IndexPost(rpost, channel.TeamId); err != nil {
@@ -849,7 +861,7 @@ func (a *App) DeletePost(postId, deleteByID string) (*model.Post, *model.AppErro
 
 func (a *App) DeleteFlaggedPosts(postId string) {
 	if err := a.Srv.Store.Preference().DeleteCategoryAndName(model.PREFERENCE_CATEGORY_FLAGGED_POST, postId); err != nil {
-		mlog.Warn(fmt.Sprintf("Unable to delete flagged post preference when deleting post, err=%v", err))
+		mlog.Warn("Unable to delete flagged post preference when deleting post.", mlog.Err(err))
 		return
 	}
 }
@@ -860,7 +872,7 @@ func (a *App) DeletePostFiles(post *model.Post) {
 	}
 
 	if _, err := a.Srv.Store.FileInfo().DeleteForPost(post.Id); err != nil {
-		mlog.Warn(fmt.Sprintf("Encountered error when deleting files for post, post_id=%v, err=%v", post.Id, err), mlog.String("post_id", post.Id))
+		mlog.Warn("Encountered error when deleting files for post", mlog.String("post_id", post.Id), mlog.Err(err))
 	}
 }
 
@@ -938,6 +950,29 @@ func (a *App) searchPostsInTeam(teamId string, userId string, paramsList []*mode
 	return posts, nil
 }
 
+func (a *App) convertChannelNamesToChannelIds(channels []string, userId string, teamId string, includeDeletedChannels bool) []string {
+	for idx, channelName := range channels {
+		channel, err := a.parseAndFetchChannelIdByNameFromInFilter(channelName, userId, teamId, includeDeletedChannels)
+		if err != nil {
+			mlog.Error("error getting channel id by name from in filter", mlog.Err(err))
+			continue
+		}
+		channels[idx] = channel.Id
+	}
+	return channels
+}
+
+func (a *App) convertUserNameToUserIds(usernames []string) []string {
+	for idx, username := range usernames {
+		if user, err := a.GetUserByUsername(username); err != nil {
+			mlog.Error("error getting user by username", mlog.String("user_name", username), mlog.Err(err))
+		} else {
+			usernames[idx] = user.Id
+		}
+	}
+	return usernames
+}
+
 func (a *App) SearchPostsInTeam(teamId string, paramsList []*model.SearchParams) (*model.PostList, *model.AppError) {
 	if !*a.Config().ServiceSettings.EnablePostSearch {
 		return nil, model.NewAppError("SearchPostsInTeam", "store.sql_post.search.disabled", nil, fmt.Sprintf("teamId=%v", teamId), http.StatusNotImplemented)
@@ -956,23 +991,12 @@ func (a *App) esSearchPostsInTeamForUser(paramsList []*model.SearchParams, userI
 		// Don't allow users to search for "*"
 		if params.Terms != "*" {
 			// Convert channel names to channel IDs
-			for idx, channelName := range params.InChannels {
-				channel, err := a.parseAndFetchChannelIdByNameFromInFilter(channelName, userId, teamId, includeDeletedChannels)
-				if err != nil {
-					mlog.Error(fmt.Sprint(err))
-					continue
-				}
-				params.InChannels[idx] = channel.Id
-			}
+			params.InChannels = a.convertChannelNamesToChannelIds(params.InChannels, userId, teamId, includeDeletedChannels)
+			params.ExcludedChannels = a.convertChannelNamesToChannelIds(params.ExcludedChannels, userId, teamId, includeDeletedChannels)
 
 			// Convert usernames to user IDs
-			for idx, username := range params.FromUsers {
-				if user, err := a.GetUserByUsername(username); err != nil {
-					mlog.Error(fmt.Sprint(err))
-				} else {
-					params.FromUsers[idx] = user.Id
-				}
-			}
+			params.FromUsers = a.convertUserNameToUserIds(params.FromUsers)
+			params.ExcludedUsers = a.convertUserNameToUserIds(params.ExcludedUsers)
 
 			finalParamsList = append(finalParamsList, params)
 		}
@@ -986,7 +1010,7 @@ func (a *App) esSearchPostsInTeamForUser(paramsList []*model.SearchParams, userI
 	// We only allow the user to search in channels they are a member of.
 	userChannels, err := a.GetChannelsForUser(teamId, userId, includeDeleted)
 	if err != nil {
-		mlog.Error(fmt.Sprint(err))
+		mlog.Error("error getting channel for user", mlog.Err(err))
 		return nil, err
 	}
 
@@ -1043,10 +1067,20 @@ func (a *App) SearchPostsInTeamForUser(terms string, userId string, teamId strin
 				if strings.HasPrefix(channelName, "@") {
 					channel, err := a.parseAndFetchChannelIdByNameFromInFilter(channelName, userId, teamId, includeDeletedChannels)
 					if err != nil {
-						mlog.Error(fmt.Sprint(err))
+						mlog.Error("error getting channel_id by name from in filter", mlog.Err(err))
 						continue
 					}
 					params.InChannels[idx] = channel.Name
+				}
+			}
+			for idx, channelName := range params.ExcludedChannels {
+				if strings.HasPrefix(channelName, "@") {
+					channel, err := a.parseAndFetchChannelIdByNameFromInFilter(channelName, userId, teamId, includeDeletedChannels)
+					if err != nil {
+						mlog.Error("error getting channel_id by name from in filter", mlog.Err(err))
+						continue
+					}
+					params.ExcludedChannels[idx] = channel.Name
 				}
 			}
 		})

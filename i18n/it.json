@@ -172,6 +172,10 @@
     "translation": "Per favore aggiungimi alle squadre e ai canali con cui vuoi che interagisca. Per farlo utilizza il browser oppure l'app desktop di Mattermost."
   },
   {
+    "id": "api.channel.add_guest.added",
+    "translation": "%v aggiunto al canale come ospite da parte di %v"
+  },
+  {
     "id": "api.channel.add_member.added",
     "translation": "%v aggiunto al canale da parte di %v"
   },
@@ -258,6 +262,10 @@
   {
     "id": "api.channel.delete_channel.type.invalid",
     "translation": "Impossibile eliminare i canali diretti o di gruppo"
+  },
+  {
+    "id": "api.channel.guest_join_channel.post_and_forget",
+    "translation": "%v si è unito al canale come ospite."
   },
   {
     "id": "api.channel.join_channel.permissions.app_error",
@@ -378,6 +386,10 @@
   {
     "id": "api.channel.update_channel_member_roles.scheme_role.app_error",
     "translation": "Il ruolo fornito è gestito da uno schema è non può essere attribuito direttamente a un membro del canale"
+  },
+  {
+    "id": "api.channel.update_channel_privacy.default_channel_error",
+    "translation": "Il canale predefinito non può essere privato."
   },
   {
     "id": "api.channel.update_channel_scheme.license.error",
@@ -1863,6 +1875,18 @@
     "translation": "Parametro necessario per aggiungere l'utente alla squadra."
   },
   {
+    "id": "api.team.add_user_to_team_from_invite.guest.app_error",
+    "translation": "Agli ospiti è impedito di accedere alle squadre seguendo un collegamento. Per favore richiedere un'email di invito alla squadra."
+  },
+  {
+    "id": "api.team.demote_user_to_guest.disabled.error",
+    "translation": "Gli account ospite sono disattivati."
+  },
+  {
+    "id": "api.team.demote_user_to_guest.license.error",
+    "translation": "La tua licenza non supporta gli account ospite"
+  },
+  {
     "id": "api.team.get_invite_info.not_open_team",
     "translation": "L'invito non è valido a causa del fatto che questa non è una squadra aperta."
   },
@@ -1907,16 +1931,24 @@
     "translation": "Errore invalidando gli inviti email."
   },
   {
+    "id": "api.team.invate_guests_to_channels.disabled.error",
+    "translation": "Gli account ospite sono disattivati"
+  },
+  {
+    "id": "api.team.invate_guests_to_channels.license.error",
+    "translation": "La tua licenza non supporta gli account ospite"
+  },
+  {
+    "id": "api.team.invite_guests.channel_in_invalid_team.app_error",
+    "translation": "I canali dell'invito devono far parte della squadra dell'invito."
+  },
+  {
     "id": "api.team.invite_members.disabled.app_error",
     "translation": "Gli inviti per email sono disattivati."
   },
   {
     "id": "api.team.invite_members.invalid_email.app_error",
     "translation": "I seguenti indirizzi email non appartengono ad un dominio accettato: {{.Addresses}}. Contattare l'amministratore di sistema per maggiori dettagli."
-  },
-  {
-    "id": "api.team.invite_members.member",
-    "translation": "membro"
   },
   {
     "id": "api.team.invite_members.no_one.app_error",
@@ -1949,6 +1981,14 @@
   {
     "id": "api.team.move_channel.success",
     "translation": "Questo canale è stato spostato in questa squadra da %v."
+  },
+  {
+    "id": "api.team.promote_guest_to_user.disabled.error",
+    "translation": "Gli account ospite sono disattivati"
+  },
+  {
+    "id": "api.team.promote_guest_to_user.license.error",
+    "translation": "La tua licenza non supporta gli account ospite"
   },
   {
     "id": "api.team.remove_member.group_constrained.app_error",
@@ -2112,11 +2152,19 @@
   },
   {
     "id": "api.templates.invite_body.info",
-    "translation": "{{.SenderStatus}} [[{{.SenderName}}]], ti ha invitato ad unirti a [[{{.TeamDisplayName}}]]."
+    "translation": "[[{{.SenderName}}]], ti ha invitato ad unirti a  [[{{.TeamDisplayName}}]]."
   },
   {
     "id": "api.templates.invite_body.title",
     "translation": "Sei stato invitato"
+  },
+  {
+    "id": "api.templates.invite_body_guest.info",
+    "translation": "[[{{.SenderName}}]], ti ha invitato ad unirti alla squadra [[{{.TeamDisplayName}}]] come ospite."
+  },
+  {
+    "id": "api.templates.invite_guest_subject",
+    "translation": "[{{ .SiteName }}] {{ .SenderName }} ti ha invitato ad unirti alla squadra {{ .TeamDisplayName }} come ospite"
   },
   {
     "id": "api.templates.invite_subject",
@@ -2367,6 +2415,18 @@
     "translation": "Creazione degli utenti disabilitata."
   },
   {
+    "id": "api.user.create_user.guest_accounts.disabled.app_error",
+    "translation": "Gli account ospite sono disattivati"
+  },
+  {
+    "id": "api.user.create_user.guest_accounts.license.app_error",
+    "translation": "La tua licenza non supporta gli account ospite"
+  },
+  {
+    "id": "api.user.create_user.invalid_invitation_type.app_error",
+    "translation": "Impossibile creare l'utente, invito non valido."
+  },
+  {
     "id": "api.user.create_user.no_open_server",
     "translation": "Questo server non supporta la registrazione pubblica.  Contatta un amministratore per ricevere un invito."
   },
@@ -2381,6 +2441,10 @@
   {
     "id": "api.user.create_user.signup_link_invalid.app_error",
     "translation": "Il collegamento per l'iscrizione non sembra essere valido"
+  },
+  {
+    "id": "api.user.demote_user_to_guest.already_guest.app_error",
+    "translation": "Impossibile convertire l'utente in ospite poiché è già un ospite"
   },
   {
     "id": "api.user.email_to_ldap.not_available.app_error",
@@ -2423,6 +2487,14 @@
     "translation": "Tentativo di utilizzare la funzione sperimentale ClientSideCertEnable senza una licenza enterprise valida"
   },
   {
+    "id": "api.user.login.guest_accounts.disabled.error",
+    "translation": "Gli account ospite sono disattivati"
+  },
+  {
+    "id": "api.user.login.guest_accounts.license.error",
+    "translation": "La tua licenza non supporta gli account ospite"
+  },
+  {
     "id": "api.user.login.inactive.app_error",
     "translation": "Login fallito perchè il tuo account è stato disattivato.  Per favore contatta il tuo amministratore."
   },
@@ -2436,7 +2508,7 @@
   },
   {
     "id": "api.user.login.invalid_credentials_sso",
-    "translation": "Inserire un'email o un nome utente e/o una password validi, oppure accedere con un metodo diverso.\n"
+    "translation": "Inserire un'email o un nome utente e/o una password validi, oppure accedere con un metodo diverso."
   },
   {
     "id": "api.user.login.invalid_credentials_username",
@@ -2473,6 +2545,10 @@
   {
     "id": "api.user.oauth_to_email.not_available.app_error",
     "translation": "Autenticazione sul Trasferimento non configurata o non disponibile su questo server."
+  },
+  {
+    "id": "api.user.promote_guest_to_user.no_guest.app_error",
+    "translation": "Impossibile convertire l'ospite in un utente regolare poiché non è un ospite"
   },
   {
     "id": "api.user.reset_password.broken_token.app_error",
@@ -2587,6 +2663,14 @@
     "translation": "Aggiornamento password fallito perchè è impossibile trovare un account valido"
   },
   {
+    "id": "api.user.update_user.accepted_domain.app_error",
+    "translation": "L'indirizzo email fornito non appartiene ai domini accettati. Contattare l'amministratore di sistema oppure utilizzare una email differente."
+  },
+  {
+    "id": "api.user.update_user.accepted_guest_domain.app_error",
+    "translation": "L'indirizzo email fornito non appartiene ai domini accettati per gli account ospite. Contattare l'amministratore di sistema oppure utilizzare una email differente."
+  },
+  {
     "id": "api.user.upload_profile_user.array.app_error",
     "translation": "Lista vuota per il campo 'image' nella richiesta"
   },
@@ -2697,6 +2781,10 @@
   {
     "id": "app.admin.test_email.failure",
     "translation": "Connessione non riuscita: {{.Error}}"
+  },
+  {
+    "id": "app.admin.test_site_url.failure",
+    "translation": "Questo URL non è valido"
   },
   {
     "id": "app.channel.create_channel.no_team_id.app_error",
@@ -3296,7 +3384,7 @@
   },
   {
     "id": "app.notification.body.intro.direct.generic",
-    "translation": "Hai un nuovo messaggio diretto da @{{.SenderName}}"
+    "translation": "Hai un nuovo messaggio diretto da {{.SenderName}}"
   },
   {
     "id": "app.notification.body.intro.group_message.full",
@@ -3304,7 +3392,7 @@
   },
   {
     "id": "app.notification.body.intro.group_message.generic",
-    "translation": "Hai un nuovo messaggio di gruppo da @{{.SenderName}}"
+    "translation": "Hai un nuovo messaggio di gruppo da {{.SenderName}}"
   },
   {
     "id": "app.notification.body.intro.notification.full",
@@ -3312,11 +3400,11 @@
   },
   {
     "id": "app.notification.body.intro.notification.generic",
-    "translation": "Hai una nuova notifica da @{{.SenderName}}"
+    "translation": "Hai una nuova notifica da {{.SenderName}}"
   },
   {
     "id": "app.notification.body.text.direct.full",
-    "translation": "@{{.SenderName}} - {{.Hour}}:{{.Minute}} {{.Timezone}}, {{.Month}} {{.Day}}"
+    "translation": "{{.SenderName}} - {{.Hour}}:{{.Minute}} {{.Timezone}}, {{.Month}} {{.Day}}"
   },
   {
     "id": "app.notification.body.text.direct.generic",
@@ -3328,7 +3416,7 @@
   },
   {
     "id": "app.notification.body.text.group_message.full2",
-    "translation": "@{{.SenderName}} - {{.Hour}}:{{.Minute}} {{.Timezone}}, {{.Month}} {{.Day}}"
+    "translation": "{{.SenderName}} - {{.Hour}}:{{.Minute}} {{.Timezone}}, {{.Month}} {{.Day}}"
   },
   {
     "id": "app.notification.body.text.group_message.generic",
@@ -3340,7 +3428,7 @@
   },
   {
     "id": "app.notification.body.text.notification.full2",
-    "translation": "@{{.SenderName}} - {{.Hour}}:{{.Minute}} {{.Timezone}}, {{.Month}} {{.Day}}"
+    "translation": "{{.SenderName}} - {{.Hour}}:{{.Minute}} {{.Timezone}}, {{.Month}} {{.Day}}"
   },
   {
     "id": "app.notification.body.text.notification.generic",
@@ -3421,6 +3509,22 @@
   {
     "id": "app.plugin.manifest.app_error",
     "translation": "Impossibile trovare il manifest del plugin estratto"
+  },
+  {
+    "id": "app.plugin.marketplace_client.app_error",
+    "translation": "Errore durante la creazione del client marketplace."
+  },
+  {
+    "id": "app.plugin.marketplace_disabled.app_error",
+    "translation": "Marketplace disattivato. Controllare i log per ulteriori informazioni."
+  },
+  {
+    "id": "app.plugin.marketplace_plugins.app_error",
+    "translation": "Errore durante il recupero dei plugin dal server marketplace."
+  },
+  {
+    "id": "app.plugin.marshal.app_error",
+    "translation": "Errore durante l'introduzione dei plugin marketplace."
   },
   {
     "id": "app.plugin.mvdir.app_error",
@@ -4092,7 +4196,7 @@
   },
   {
     "id": "mfa.validate_token.authenticate.app_error",
-    "translation": "Errore cercando di autenticare il token MFA"
+    "translation": "Token MFA invalido."
   },
   {
     "id": "migrations.worker.run_advanced_permissions_phase_2_migration.invalid_progress",
@@ -4809,6 +4913,22 @@
   {
     "id": "model.group_syncable.type.app_error",
     "translation": "proprietà type non valida per il gruppo syncable"
+  },
+  {
+    "id": "model.guest.is_valid.channel.app_error",
+    "translation": "Canale non valido"
+  },
+  {
+    "id": "model.guest.is_valid.channels.app_error",
+    "translation": "Canali non validi"
+  },
+  {
+    "id": "model.guest.is_valid.email.app_error",
+    "translation": "Email invalida"
+  },
+  {
+    "id": "model.guest.is_valid.emails.app_error",
+    "translation": "Email invalide"
   },
   {
     "id": "model.incoming_hook.channel_id.app_error",
@@ -5567,6 +5687,10 @@
     "translation": "Impossibile recuperare i canali"
   },
   {
+    "id": "store.sql_channel.get_pinnedpost_count.app_error",
+    "translation": "Impossibile recuperare il conteggio delle pubblicazione bloccate"
+  },
+  {
     "id": "store.sql_channel.get_public_channels.get.app_error",
     "translation": "Impossibile recuperare i canali pubblici"
   },
@@ -6255,10 +6379,6 @@
     "translation": "Non è stato possibile selezionare le pubblicazioni da eliminare per l'utente (troppe pubblicazioni), per favore rilancia"
   },
   {
-    "id": "store.sql_post.query_max_post_size.error",
-    "translation": "Impossibile determinare la dimensione massima supportata per le pubblicazioni"
-  },
-  {
     "id": "store.sql_post.save.app_error",
     "translation": "Impossibile salvare la pubblicazione"
   },
@@ -6301,10 +6421,6 @@
   {
     "id": "store.sql_preference.insert.save.app_error",
     "translation": "Impossibile salvare le preferenze"
-  },
-  {
-    "id": "store.sql_preference.is_feature_enabled.app_error",
-    "translation": "Errore riscontrato durante la ricerca di una preferenza per funzionalità in antemprima"
   },
   {
     "id": "store.sql_preference.permanent_delete_by_user.app_error",
@@ -6523,6 +6639,10 @@
     "translation": "Impossibile aggiornare il campo last_activity_at"
   },
   {
+    "id": "store.sql_session.update_props.app_error",
+    "translation": "Impossibile aggiornare le proprietà della sessione"
+  },
+  {
     "id": "store.sql_session.update_roles.app_error",
     "translation": "Impossibile aggiornare lo i ruoli"
   },
@@ -6533,18 +6653,6 @@
   {
     "id": "store.sql_status.get.missing.app_error",
     "translation": "Nessuna voce esistente per quello stato"
-  },
-  {
-    "id": "store.sql_status.get_online.app_error",
-    "translation": "Errore riscontrato nel recupero di tutti gli stati online"
-  },
-  {
-    "id": "store.sql_status.get_online_away.app_error",
-    "translation": "Errore riscontrato nel recupero di tutti gli stati online/assente"
-  },
-  {
-    "id": "store.sql_status.get_team_statuses.app_error",
-    "translation": "Errore riscontrato durante il recupero di tutti gli stati dei membri della squadra"
   },
   {
     "id": "store.sql_status.get_total_active_users_count.app_error",
@@ -6589,6 +6697,14 @@
   {
     "id": "store.sql_team.analytics_get_team_count_for_scheme.app_error",
     "translation": "Impossibile recuperare il conteggio dei canali per lo schema."
+  },
+  {
+    "id": "store.sql_team.analytics_private_team_count.app_error",
+    "translation": "Impossibile contare le squadre private"
+  },
+  {
+    "id": "store.sql_team.analytics_public_team_count.app_error",
+    "translation": "Impossibile contare le squadre pubbliche"
   },
   {
     "id": "store.sql_team.analytics_team_count.app_error",
@@ -6644,6 +6760,10 @@
   },
   {
     "id": "store.sql_team.get_by_name.app_error",
+    "translation": "Non è stato possibile trovare la squadra esistente"
+  },
+  {
+    "id": "store.sql_team.get_by_name.missing.app_error",
     "translation": "Non è stato possibile trovare la squadra esistente"
   },
   {
@@ -6755,10 +6875,6 @@
     "translation": "Riscontrato un errore nell'aggiornamento della squadra"
   },
   {
-    "id": "store.sql_team.update_display_name.app_error",
-    "translation": "Impossibile aggiornare il nome della squadra"
-  },
-  {
     "id": "store.sql_team.update_last_team_icon_update.app_error",
     "translation": "Impossibile aggiornare la data dell'ultimo aggiornamento dell'icona di squadra"
   },
@@ -6817,6 +6933,26 @@
   {
     "id": "store.sql_user.count.app_error",
     "translation": "UserCountOptions non ha senso"
+  },
+  {
+    "id": "store.sql_user.demote_user_to_guest.channel_members_update.app_error",
+    "translation": "Errore durante l'aggiornamento dei canali utente"
+  },
+  {
+    "id": "store.sql_user.demote_user_to_guest.commit_transaction.app_error",
+    "translation": "Impossibile confermare la transazione sul database"
+  },
+  {
+    "id": "store.sql_user.demote_user_to_guest.open_transaction.app_error",
+    "translation": "Impossibile avviare una transazione sul database"
+  },
+  {
+    "id": "store.sql_user.demote_user_to_guest.team_members_update.app_error",
+    "translation": "Errore durante l'aggiornamento delle squadre utente"
+  },
+  {
+    "id": "store.sql_user.demote_user_to_guest.user_update.app_error",
+    "translation": "Impossibile aggiornare l'utente"
   },
   {
     "id": "store.sql_user.get.app_error",
@@ -6897,6 +7033,26 @@
   {
     "id": "store.sql_user.permanent_delete.app_error",
     "translation": "Impossibile cancellare l'account esistente"
+  },
+  {
+    "id": "store.sql_user.promote_guest.channel_members_update.app_error",
+    "translation": "Errore durante l'aggiornamento dei canali utente"
+  },
+  {
+    "id": "store.sql_user.promote_guest.commit_transaction.app_error",
+    "translation": "Impossibile confermare la transazione sul database"
+  },
+  {
+    "id": "store.sql_user.promote_guest.open_transaction.app_error",
+    "translation": "Impossibile avviare una transazione sul database"
+  },
+  {
+    "id": "store.sql_user.promote_guest.team_members_update.app_error",
+    "translation": "Errore durante l'aggiornamento delle squadre utente"
+  },
+  {
+    "id": "store.sql_user.promote_guest.user_update.app_error",
+    "translation": "Impossibile aggiornare l'utente"
   },
   {
     "id": "store.sql_user.save.app_error",
@@ -7223,12 +7379,100 @@
     "translation": "Impossibile analizzare i dati in ingresso"
   },
   {
-    "id": "web.error.unsupported_browser.message",
-    "translation": "Il tuo browser non è supportate. Per favore aggiornalo o utilizza uno dei seguenti browser:"
+    "id": "web.error.unsupported_browser.browser_get_latest.chrome",
+    "translation": "Ottieni l'ultima versione del browser Chrome"
   },
   {
-    "id": "web.error.unsupported_browser.title",
-    "translation": "Browser non supportato"
+    "id": "web.error.unsupported_browser.browser_get_latest.firefox",
+    "translation": "Ottieni l'ultima versione del browser Firefox"
+  },
+  {
+    "id": "web.error.unsupported_browser.browser_get_latest.safari",
+    "translation": "Ottieni l'ultima versione del browser Safari"
+  },
+  {
+    "id": "web.error.unsupported_browser.browser_title.chrome",
+    "translation": "Google Chrome"
+  },
+  {
+    "id": "web.error.unsupported_browser.browser_title.edge",
+    "translation": "Microsoft Edge"
+  },
+  {
+    "id": "web.error.unsupported_browser.browser_title.firefox",
+    "translation": "Firefox"
+  },
+  {
+    "id": "web.error.unsupported_browser.browser_title.safari",
+    "translation": "Safari"
+  },
+  {
+    "id": "web.error.unsupported_browser.download",
+    "translation": "Scarica l'App"
+  },
+  {
+    "id": "web.error.unsupported_browser.download_app_or_upgrade_browser",
+    "translation": "Scarica l'app Mattermost oppure utilizza un browser supportato per un'esperienza migliore."
+  },
+  {
+    "id": "web.error.unsupported_browser.download_the_app",
+    "translation": "Scarica l'App"
+  },
+  {
+    "id": "web.error.unsupported_browser.install_guide.mac",
+    "translation": "Guida Installazione"
+  },
+  {
+    "id": "web.error.unsupported_browser.install_guide.windows",
+    "translation": "Guida Installazione"
+  },
+  {
+    "id": "web.error.unsupported_browser.learn_more",
+    "translation": "Scopri di più sui browser supportati."
+  },
+  {
+    "id": "web.error.unsupported_browser.min_browser_version.chrome",
+    "translation": "Versione 61+"
+  },
+  {
+    "id": "web.error.unsupported_browser.min_browser_version.edge",
+    "translation": "Versione 44+"
+  },
+  {
+    "id": "web.error.unsupported_browser.min_browser_version.firefox",
+    "translation": "Versione 60+"
+  },
+  {
+    "id": "web.error.unsupported_browser.min_browser_version.safari",
+    "translation": "Versione 12+"
+  },
+  {
+    "id": "web.error.unsupported_browser.min_os_version.mac",
+    "translation": "macOS 10.9+"
+  },
+  {
+    "id": "web.error.unsupported_browser.min_os_version.windows",
+    "translation": "Windows 7+"
+  },
+  {
+    "id": "web.error.unsupported_browser.no_longer_support",
+    "translation": "Browser non più supportato"
+  },
+  {
+    "id": "web.error.unsupported_browser.no_longer_support_version",
+    "translation": "Versione browser non più supportata"
+  },
+  {
+    "id": "web.error.unsupported_browser.open_system_browser.edge",
+    "translation": "Apri Edge"
+  },
+  {
+    "id": "web.error.unsupported_browser.system_browser_make_default",
+    "translation": "Rendi predefinito"
+  },
+  {
+    "id": "web.error.unsupported_browser.system_browser_or",
+    "translation": "oppure"
   },
   {
     "id": "web.get_access_token.internal_saving.app_error",

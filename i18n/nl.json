@@ -172,6 +172,10 @@
     "translation": "Please add me to teams and channels you want me to interact in. To do this, use the browser or Mattermost Desktop App."
   },
   {
+    "id": "api.channel.add_guest.added",
+    "translation": "%v is door %v aan het kanaal toegevoegd."
+  },
+  {
     "id": "api.channel.add_member.added",
     "translation": "%v is door %v aan het kanaal toegevoegd."
   },
@@ -258,6 +262,10 @@
   {
     "id": "api.channel.delete_channel.type.invalid",
     "translation": "Unable to delete direct or group message channels"
+  },
+  {
+    "id": "api.channel.guest_join_channel.post_and_forget",
+    "translation": "%v joined the channel as guest."
   },
   {
     "id": "api.channel.join_channel.permissions.app_error",
@@ -378,6 +386,10 @@
   {
     "id": "api.channel.update_channel_member_roles.scheme_role.app_error",
     "translation": "The provided role is managed by a Scheme and therefore cannot be applied directly to a Channel Member"
+  },
+  {
+    "id": "api.channel.update_channel_privacy.default_channel_error",
+    "translation": "The default channel cannot be made private."
   },
   {
     "id": "api.channel.update_channel_scheme.license.error",
@@ -1863,6 +1875,18 @@
     "translation": "Parameter required to add user to team."
   },
   {
+    "id": "api.team.add_user_to_team_from_invite.guest.app_error",
+    "translation": "Guests are restricted from joining a team with a invite link. Please request a guest email invitation to the team."
+  },
+  {
+    "id": "api.team.demote_user_to_guest.disabled.error",
+    "translation": "Guest accounts are disabled."
+  },
+  {
+    "id": "api.team.demote_user_to_guest.license.error",
+    "translation": "Your license does not support guest accounts"
+  },
+  {
     "id": "api.team.get_invite_info.not_open_team",
     "translation": "De uitnodiging is ongeldig, omdat dit geen open team is."
   },
@@ -1907,16 +1931,24 @@
     "translation": "Error invalidating email invites."
   },
   {
+    "id": "api.team.invate_guests_to_channels.disabled.error",
+    "translation": "Guest accounts are disabled"
+  },
+  {
+    "id": "api.team.invate_guests_to_channels.license.error",
+    "translation": "Your license does not support guest accounts"
+  },
+  {
+    "id": "api.team.invite_guests.channel_in_invalid_team.app_error",
+    "translation": "The channels of the invite must be part of the team of the invite."
+  },
+  {
     "id": "api.team.invite_members.disabled.app_error",
     "translation": "Email invitations are disabled."
   },
   {
     "id": "api.team.invite_members.invalid_email.app_error",
     "translation": "The following email addresses do not belong to an accepted domain: {{.Addresses}}. Please contact your System Administrator for details."
-  },
-  {
-    "id": "api.team.invite_members.member",
-    "translation": "lid"
   },
   {
     "id": "api.team.invite_members.no_one.app_error",
@@ -1949,6 +1981,14 @@
   {
     "id": "api.team.move_channel.success",
     "translation": "This channel has been moved to this team from %v."
+  },
+  {
+    "id": "api.team.promote_guest_to_user.disabled.error",
+    "translation": "Guest accounts are disabled."
+  },
+  {
+    "id": "api.team.promote_guest_to_user.license.error",
+    "translation": "Your license does not support guest accounts"
   },
   {
     "id": "api.team.remove_member.group_constrained.app_error",
@@ -2112,11 +2152,19 @@
   },
   {
     "id": "api.templates.invite_body.info",
-    "translation": "The team {{.SenderStatus}} [[{{.SenderName}}]], has invited you to join [[{{.TeamDisplayName}}]]."
+    "translation": "[[{{.SenderName}}]], has invited you to join [[{{.TeamDisplayName}}]]."
   },
   {
     "id": "api.templates.invite_body.title",
     "translation": "Je bent uitgenodigd"
+  },
+  {
+    "id": "api.templates.invite_body_guest.info",
+    "translation": "[[{{.SenderName}}]], has invited you to join team [[{{.TeamDisplayName}}]] as a guest."
+  },
+  {
+    "id": "api.templates.invite_guest_subject",
+    "translation": "[{{ .SiteName }}] {{ .SenderName }} invited you to join the team {{ .TeamDisplayName }} as a guest"
   },
   {
     "id": "api.templates.invite_subject",
@@ -2367,6 +2415,18 @@
     "translation": "User creation is disabled."
   },
   {
+    "id": "api.user.create_user.guest_accounts.disabled.app_error",
+    "translation": "Guest accounts are disabled"
+  },
+  {
+    "id": "api.user.create_user.guest_accounts.license.app_error",
+    "translation": "Your license does not support guest accounts"
+  },
+  {
+    "id": "api.user.create_user.invalid_invitation_type.app_error",
+    "translation": "Unable to create the user, invalid invitation."
+  },
+  {
     "id": "api.user.create_user.no_open_server",
     "translation": "Deze server staat zelf aanmelden niet toe.  Neem contact op met uw systeembeheerder voor een uitnodiging."
   },
@@ -2381,6 +2441,10 @@
   {
     "id": "api.user.create_user.signup_link_invalid.app_error",
     "translation": "De aanmeld link is niet geldig"
+  },
+  {
+    "id": "api.user.demote_user_to_guest.already_guest.app_error",
+    "translation": "Unable to convert the user to guest because is already a guest"
   },
   {
     "id": "api.user.email_to_ldap.not_available.app_error",
@@ -2423,6 +2487,14 @@
     "translation": "Attempt to use the experimental feature ClientSideCertEnable without a valid enterprise license"
   },
   {
+    "id": "api.user.login.guest_accounts.disabled.error",
+    "translation": "Guest accounts are disabled"
+  },
+  {
+    "id": "api.user.login.guest_accounts.license.error",
+    "translation": "Your license does not support guest accounts"
+  },
+  {
     "id": "api.user.login.inactive.app_error",
     "translation": "Inloggen in niet mogelijk, omdat het account uitgeschakeld is. Neem contact op met een beheerder."
   },
@@ -2436,7 +2508,7 @@
   },
   {
     "id": "api.user.login.invalid_credentials_sso",
-    "translation": "Enter a valid email or username and/or password, or sign in using another method.\n"
+    "translation": "Enter a valid email or username and/or password, or sign in using another method."
   },
   {
     "id": "api.user.login.invalid_credentials_username",
@@ -2473,6 +2545,10 @@
   {
     "id": "api.user.oauth_to_email.not_available.app_error",
     "translation": "Authentication Transfer not configured or available on this server."
+  },
+  {
+    "id": "api.user.promote_guest_to_user.no_guest.app_error",
+    "translation": "Unable to convert the guest to regular user because is not a guest"
   },
   {
     "id": "api.user.reset_password.broken_token.app_error",
@@ -2587,6 +2663,14 @@
     "translation": "Wachtwoord bijwerken is mislukt, want er is geen geldig account gevonden"
   },
   {
+    "id": "api.user.update_user.accepted_domain.app_error",
+    "translation": "Het email adress dat is opgegeven behoord niet tot een van de geldige domeinen. Neem contact op met de beheerder, of log in met een ander e-mail adres."
+  },
+  {
+    "id": "api.user.update_user.accepted_guest_domain.app_error",
+    "translation": "Het email adress dat is opgegeven behoord niet tot een van de geldige domeinen. Neem contact op met de beheerder, of log in met een ander e-mail adres."
+  },
+  {
     "id": "api.user.upload_profile_user.array.app_error",
     "translation": "Lege data bij 'licentie' in aanvraag"
   },
@@ -2697,6 +2781,10 @@
   {
     "id": "app.admin.test_email.failure",
     "translation": "Connection unsuccessful: {{.Error}}"
+  },
+  {
+    "id": "app.admin.test_site_url.failure",
+    "translation": "This is not a valid live URL"
   },
   {
     "id": "app.channel.create_channel.no_team_id.app_error",
@@ -3296,7 +3384,7 @@
   },
   {
     "id": "app.notification.body.intro.direct.generic",
-    "translation": "You have a new Direct Message from @{{.SenderName}}"
+    "translation": "You have a new Direct Message from {{.SenderName}}"
   },
   {
     "id": "app.notification.body.intro.group_message.full",
@@ -3304,7 +3392,7 @@
   },
   {
     "id": "app.notification.body.intro.group_message.generic",
-    "translation": "You have a new Group Message from @{{.SenderName}}"
+    "translation": "You have a new Group Message from {{.SenderName}}"
   },
   {
     "id": "app.notification.body.intro.notification.full",
@@ -3312,7 +3400,7 @@
   },
   {
     "id": "app.notification.body.intro.notification.generic",
-    "translation": "You have a new notification from @{{.SenderName}}"
+    "translation": "You have a new notification from {{.SenderName}}"
   },
   {
     "id": "app.notification.body.text.direct.full",
@@ -3421,6 +3509,22 @@
   {
     "id": "app.plugin.manifest.app_error",
     "translation": "Unable to find manifest for extracted plugin"
+  },
+  {
+    "id": "app.plugin.marketplace_client.app_error",
+    "translation": "Failed to create marketplace client."
+  },
+  {
+    "id": "app.plugin.marketplace_disabled.app_error",
+    "translation": "Marketplace has been disabled. Please check your logs for details."
+  },
+  {
+    "id": "app.plugin.marketplace_plugins.app_error",
+    "translation": "Failed to get plugins from the marketplace server."
+  },
+  {
+    "id": "app.plugin.marshal.app_error",
+    "translation": "Failed to marshal marketplace plugins."
   },
   {
     "id": "app.plugin.mvdir.app_error",
@@ -4092,7 +4196,7 @@
   },
   {
     "id": "mfa.validate_token.authenticate.app_error",
-    "translation": "Er is een probleem bij het authenticeren met een MFA token opgetreden"
+    "translation": "Ongeldige 'MFA' token."
   },
   {
     "id": "migrations.worker.run_advanced_permissions_phase_2_migration.invalid_progress",
@@ -4420,11 +4524,11 @@
   },
   {
     "id": "model.config.is_valid.elastic_search.enable_autocomplete.app_error",
-    "translation": "Elastic Search IndexingEnabled setting must be set to true when Elastic Search AutocompleteEnabled is set to true."
+    "translation": "Elasticsearch IndexingEnabled setting must be set to true when Elastic Search AutocompleteEnabled is set to true."
   },
   {
     "id": "model.config.is_valid.elastic_search.enable_searching.app_error",
-    "translation": "Elastic Search IndexingEnabled setting must be set to true when Elastic Search SearchEnabled is set to true."
+    "translation": "Elasticsearch IndexingEnabled setting must be set to true when Elastic Search SearchEnabled is set to true."
   },
   {
     "id": "model.config.is_valid.elastic_search.live_indexing_batch_size.app_error",
@@ -4809,6 +4913,22 @@
   {
     "id": "model.group_syncable.type.app_error",
     "translation": "invalid type property for group syncable"
+  },
+  {
+    "id": "model.guest.is_valid.channel.app_error",
+    "translation": "Ongeldig kanaal id"
+  },
+  {
+    "id": "model.guest.is_valid.channels.app_error",
+    "translation": "Ongeldig kanaal id"
+  },
+  {
+    "id": "model.guest.is_valid.email.app_error",
+    "translation": "Ongeldige e-mail"
+  },
+  {
+    "id": "model.guest.is_valid.emails.app_error",
+    "translation": "Ongeldige e-mail"
   },
   {
     "id": "model.incoming_hook.channel_id.app_error",
@@ -5567,6 +5687,10 @@
     "translation": "Kan de kanalen niet ophalen"
   },
   {
+    "id": "store.sql_channel.get_pinnedpost_count.app_error",
+    "translation": "We kunnen het aantal leden van het kanaal niet tellen"
+  },
+  {
     "id": "store.sql_channel.get_public_channels.get.app_error",
     "translation": "Kan de kanalen niet ophalen"
   },
@@ -6255,10 +6379,6 @@
     "translation": "We kunnen de geselecteerde berichten voor de gebruiker niet verwijderen (het zijn er te veel), probeer opnieuw"
   },
   {
-    "id": "store.sql_post.query_max_post_size.error",
-    "translation": "Unable to determine the maximum supported post size"
-  },
-  {
     "id": "store.sql_post.save.app_error",
     "translation": "Bericht kan niet opgehaald worden"
   },
@@ -6301,10 +6421,6 @@
   {
     "id": "store.sql_preference.insert.save.app_error",
     "translation": "Unable to save the preference"
-  },
-  {
-    "id": "store.sql_preference.is_feature_enabled.app_error",
-    "translation": "Er is een probleem opgetreden tijdens het zoeken naar een pre-release functie voorkeur"
   },
   {
     "id": "store.sql_preference.permanent_delete_by_user.app_error",
@@ -6523,6 +6639,10 @@
     "translation": "Unable to update the last_activity_at"
   },
   {
+    "id": "store.sql_session.update_props.app_error",
+    "translation": "Unable to update session props"
+  },
+  {
     "id": "store.sql_session.update_roles.app_error",
     "translation": "Bericht kan niet opgehaald worden"
   },
@@ -6533,18 +6653,6 @@
   {
     "id": "store.sql_status.get.missing.app_error",
     "translation": "Er is niks ingevoerd voor deze status"
-  },
-  {
-    "id": "store.sql_status.get_online.app_error",
-    "translation": "Fout bij het ophalen van de online statussen"
-  },
-  {
-    "id": "store.sql_status.get_online_away.app_error",
-    "translation": "Fout bij het ophalen van de online/weg statuses"
-  },
-  {
-    "id": "store.sql_status.get_team_statuses.app_error",
-    "translation": "Fout bij het ophalen van de statussen van alle team leden"
   },
   {
     "id": "store.sql_status.get_total_active_users_count.app_error",
@@ -6589,6 +6697,14 @@
   {
     "id": "store.sql_team.analytics_get_team_count_for_scheme.app_error",
     "translation": "Unable to get the channel count for the scheme."
+  },
+  {
+    "id": "store.sql_team.analytics_private_team_count.app_error",
+    "translation": "Bericht kan niet opgehaald worden"
+  },
+  {
+    "id": "store.sql_team.analytics_public_team_count.app_error",
+    "translation": "Bericht kan niet opgehaald worden"
   },
   {
     "id": "store.sql_team.analytics_team_count.app_error",
@@ -6644,6 +6760,10 @@
   },
   {
     "id": "store.sql_team.get_by_name.app_error",
+    "translation": "We kunnen geen bestaand team vinden om bij te werken"
+  },
+  {
+    "id": "store.sql_team.get_by_name.missing.app_error",
     "translation": "We kunnen geen bestaand team vinden om bij te werken"
   },
   {
@@ -6755,10 +6875,6 @@
     "translation": "Er is een fout opgetreden tijdens het bijwerken van het team"
   },
   {
-    "id": "store.sql_team.update_display_name.app_error",
-    "translation": "Bericht kan niet opgehaald worden"
-  },
-  {
     "id": "store.sql_team.update_last_team_icon_update.app_error",
     "translation": "Unable to update the date of the last team icon update"
   },
@@ -6817,6 +6933,26 @@
   {
     "id": "store.sql_user.count.app_error",
     "translation": "UserCountOptions don't make sense"
+  },
+  {
+    "id": "store.sql_user.demote_user_to_guest.channel_members_update.app_error",
+    "translation": "Kan leden niet toevoegen aan het directe kanaal"
+  },
+  {
+    "id": "store.sql_user.demote_user_to_guest.commit_transaction.app_error",
+    "translation": "Failed to commit the database transaction"
+  },
+  {
+    "id": "store.sql_user.demote_user_to_guest.open_transaction.app_error",
+    "translation": "Failed to begin the database transaction"
+  },
+  {
+    "id": "store.sql_user.demote_user_to_guest.team_members_update.app_error",
+    "translation": "Kan leden niet toevoegen aan het directe kanaal"
+  },
+  {
+    "id": "store.sql_user.demote_user_to_guest.user_update.app_error",
+    "translation": "Kan de kanalen niet ophalen"
   },
   {
     "id": "store.sql_user.get.app_error",
@@ -6897,6 +7033,26 @@
   {
     "id": "store.sql_user.permanent_delete.app_error",
     "translation": "We kunnen geen bestaand team vinden om bij te werken"
+  },
+  {
+    "id": "store.sql_user.promote_guest.channel_members_update.app_error",
+    "translation": "Kan leden niet toevoegen aan het directe kanaal"
+  },
+  {
+    "id": "store.sql_user.promote_guest.commit_transaction.app_error",
+    "translation": "Failed to commit the database transaction"
+  },
+  {
+    "id": "store.sql_user.promote_guest.open_transaction.app_error",
+    "translation": "Failed to begin the database transaction"
+  },
+  {
+    "id": "store.sql_user.promote_guest.team_members_update.app_error",
+    "translation": "Kan leden niet toevoegen aan het directe kanaal"
+  },
+  {
+    "id": "store.sql_user.promote_guest.user_update.app_error",
+    "translation": "Kan de kanalen niet ophalen"
   },
   {
     "id": "store.sql_user.save.app_error",
@@ -7223,12 +7379,100 @@
     "translation": "Kan binnenkomende data niet verwerken"
   },
   {
-    "id": "web.error.unsupported_browser.message",
-    "translation": "Your current browser is not supported. Please upgrade to one of the following browsers:"
+    "id": "web.error.unsupported_browser.browser_get_latest.chrome",
+    "translation": "Get the latest Chrome browser"
   },
   {
-    "id": "web.error.unsupported_browser.title",
-    "translation": "Unsupported Browser"
+    "id": "web.error.unsupported_browser.browser_get_latest.firefox",
+    "translation": "Get the latest Firefox browser"
+  },
+  {
+    "id": "web.error.unsupported_browser.browser_get_latest.safari",
+    "translation": "Get the latest Safari browser"
+  },
+  {
+    "id": "web.error.unsupported_browser.browser_title.chrome",
+    "translation": "Google Chrome"
+  },
+  {
+    "id": "web.error.unsupported_browser.browser_title.edge",
+    "translation": "Microsoft Edge"
+  },
+  {
+    "id": "web.error.unsupported_browser.browser_title.firefox",
+    "translation": "Firefox"
+  },
+  {
+    "id": "web.error.unsupported_browser.browser_title.safari",
+    "translation": "Safari"
+  },
+  {
+    "id": "web.error.unsupported_browser.download",
+    "translation": "Download the App"
+  },
+  {
+    "id": "web.error.unsupported_browser.download_app_or_upgrade_browser",
+    "translation": "Download the Mattermost app or use a supported browser for a better experience."
+  },
+  {
+    "id": "web.error.unsupported_browser.download_the_app",
+    "translation": "Download the App"
+  },
+  {
+    "id": "web.error.unsupported_browser.install_guide.mac",
+    "translation": "Install Guide"
+  },
+  {
+    "id": "web.error.unsupported_browser.install_guide.windows",
+    "translation": "Install Guide"
+  },
+  {
+    "id": "web.error.unsupported_browser.learn_more",
+    "translation": "Learn more about supported browsers."
+  },
+  {
+    "id": "web.error.unsupported_browser.min_browser_version.chrome",
+    "translation": "Version 61+"
+  },
+  {
+    "id": "web.error.unsupported_browser.min_browser_version.edge",
+    "translation": "Version 44+"
+  },
+  {
+    "id": "web.error.unsupported_browser.min_browser_version.firefox",
+    "translation": "Version 60+"
+  },
+  {
+    "id": "web.error.unsupported_browser.min_browser_version.safari",
+    "translation": "Version 12+"
+  },
+  {
+    "id": "web.error.unsupported_browser.min_os_version.mac",
+    "translation": "macOS 10.9+"
+  },
+  {
+    "id": "web.error.unsupported_browser.min_os_version.windows",
+    "translation": "Windows 7+"
+  },
+  {
+    "id": "web.error.unsupported_browser.no_longer_support",
+    "translation": "We no longer support this browser"
+  },
+  {
+    "id": "web.error.unsupported_browser.no_longer_support_version",
+    "translation": "We no longer support this version of your browser"
+  },
+  {
+    "id": "web.error.unsupported_browser.open_system_browser.edge",
+    "translation": "Open Edge"
+  },
+  {
+    "id": "web.error.unsupported_browser.system_browser_make_default",
+    "translation": "Make default"
+  },
+  {
+    "id": "web.error.unsupported_browser.system_browser_or",
+    "translation": "or"
   },
   {
     "id": "web.get_access_token.internal_saving.app_error",

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/mattermost/mattermost-server/mlog"
@@ -127,7 +128,7 @@ func TestEmailTest(t *testing.T) {
 
 		inbucket_host := os.Getenv("CI_INBUCKET_HOST")
 		if inbucket_host == "" {
-			inbucket_host = "dockerhost"
+			inbucket_host = "localhost"
 		}
 
 		inbucket_port := os.Getenv("CI_INBUCKET_PORT")
@@ -145,6 +146,47 @@ func TestEmailTest(t *testing.T) {
 		th.App.UpdateConfig(func(cfg *model.Config) { *cfg.ExperimentalSettings.RestrictSystemAdmin = true })
 
 		_, resp := th.SystemAdminClient.TestEmail(&config)
+		CheckForbiddenStatus(t, resp)
+	})
+}
+
+func TestSiteURLTest(t *testing.T) {
+	th := Setup().InitBasic()
+	defer th.TearDown()
+	Client := th.Client
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/valid/api/v4/system/ping") {
+			w.WriteHeader(200)
+		} else {
+			w.WriteHeader(400)
+		}
+	}))
+	defer ts.Close()
+
+	validSiteURL := ts.URL + "/valid"
+	invalidSiteURL := ts.URL + "/invalid"
+
+	t.Run("as system admin", func(t *testing.T) {
+		_, resp := th.SystemAdminClient.TestSiteURL("")
+		CheckBadRequestStatus(t, resp)
+
+		_, resp = th.SystemAdminClient.TestSiteURL(invalidSiteURL)
+		CheckBadRequestStatus(t, resp)
+
+		_, resp = th.SystemAdminClient.TestSiteURL(validSiteURL)
+		CheckOKStatus(t, resp)
+	})
+
+	t.Run("as system user", func(t *testing.T) {
+		_, resp := Client.TestSiteURL(validSiteURL)
+		CheckForbiddenStatus(t, resp)
+	})
+
+	t.Run("as restricted system admin", func(t *testing.T) {
+		th.App.UpdateConfig(func(cfg *model.Config) { *cfg.ExperimentalSettings.RestrictSystemAdmin = true })
+
+		_, resp := Client.TestSiteURL(validSiteURL)
 		CheckForbiddenStatus(t, resp)
 	})
 }
@@ -341,7 +383,7 @@ func TestGetAnalyticsOld(t *testing.T) {
 	rows2, resp2 = th.SystemAdminClient.GetAnalyticsOld("standard", "")
 	CheckNoError(t, resp2)
 	assert.Equal(t, "total_websocket_connections", rows2[5].Name)
-	assert.Equal(t, float64(1), rows2[5].Value)
+	assert.Equal(t, float64(th.App.TotalWebsocketConnections()), rows2[5].Value)
 
 	WebSocketClient.Close()
 
@@ -362,7 +404,7 @@ func TestS3TestConnection(t *testing.T) {
 
 	s3Host := os.Getenv("CI_MINIO_HOST")
 	if s3Host == "" {
-		s3Host = "dockerhost"
+		s3Host = "localhost"
 	}
 
 	s3Port := os.Getenv("CI_MINIO_PORT")

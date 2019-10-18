@@ -246,6 +246,7 @@ func (a *App) InvalidateCacheForChannelMembers(channelId string) {
 func (a *App) InvalidateCacheForChannelMembersSkipClusterSend(channelId string) {
 	a.Srv.Store.User().InvalidateProfilesInChannelCache(channelId)
 	a.Srv.Store.Channel().InvalidateMemberCount(channelId)
+	a.Srv.Store.Channel().InvalidateGuestCount(channelId)
 }
 
 func (a *App) InvalidateCacheForChannelMembersNotifyProps(channelId string) {
@@ -288,6 +289,7 @@ func (a *App) InvalidateCacheForChannelPosts(channelId string) {
 
 func (a *App) InvalidateCacheForChannelPostsSkipClusterSend(channelId string) {
 	a.Srv.Store.Post().InvalidateLastPostTimeCache(channelId)
+	a.Srv.Store.Channel().InvalidatePinnedPostCount(channelId)
 }
 
 func (a *App) InvalidateCacheForUser(userId string) {
