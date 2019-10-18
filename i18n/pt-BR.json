@@ -4527,10 +4527,6 @@
     "translation": "A opção Elastic Search IndexingEnabled deve ser configurada para verdadeiro quando o Elastic Search AutocompleteEnabled estiver configurado como verdadeiro."
   },
   {
-    "id": "model.config.is_valid.elastic_search.enable_autocomplete.app_error",
-    "translation": "O opção Elastic Search IndexingEnabled deve ser configurada para verdadeiro quando o Elastic Search AutocompleteEnabled estiver configurado como verdadeiro."
-  },
-  {
     "id": "model.config.is_valid.elastic_search.enable_searching.app_error",
     "translation": "A opção ElasticSearch IndexingEnabled deve ser configurada para verdadeiro quando o Elastic Search SearchEnabled estiver configurado como verdadeiro."
   },

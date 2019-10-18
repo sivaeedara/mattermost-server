@@ -4527,10 +4527,6 @@
     "translation": "Elastic Search AutocompleteEnabled seçeneği true olarak ayarlandığında, Elasticsearch IndexingEnabled seçeneği de true olarak ayarlanmalıdır."
   },
   {
-    "id": "model.config.is_valid.elastic_search.enable_autocomplete.app_error",
-    "translation": "Elastic Search AutocompleteEnabled seçeneği true olarak ayarlandığında, Elastic Search IndexingEnabled seçeneği de true olarak ayarlanmalıdır."
-  },
-  {
     "id": "model.config.is_valid.elastic_search.enable_searching.app_error",
     "translation": "Elastic Search SearchEnabled seçeneği true olarak ayarlandığında, Elasticsearch IndexingEnabled seçeneği de true olarak ayarlanmalıdır."
   },
