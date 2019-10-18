@@ -4527,10 +4527,6 @@
     "translation": "Setarea Elasticsearch IndexingEnabled trebuie să fie adevărată atunci când Elastic Search AutocompleteEnabled este setat pe true."
   },
   {
-    "id": "model.config.is_valid.elastic_search.enable_autocomplete.app_error",
-    "translation": "Setarea Elastic Search IndexingEnabled trebuie să fie setată la true când Elastic Search AutocompleteEnabled este setat la true."
-  },
-  {
     "id": "model.config.is_valid.elastic_search.enable_searching.app_error",
     "translation": "Elasticsearch IndexingEnabled trebuie să fie setat pe true când Elastic Search SearchEnabled este setat pe true."
   },

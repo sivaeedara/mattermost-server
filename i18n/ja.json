@@ -4527,10 +4527,6 @@
     "translation": "Elasticsearch 自動補完が有効に設定されている場合、Elasticsearch インデックス有効化設定は有効でなければなりません。"
   },
   {
-    "id": "model.config.is_valid.elastic_search.enable_autocomplete.app_error",
-    "translation": "Elastic Search自動保管設定が有効に設定されている場合、Elastic Searchインデックス有効化設定は有効でなければなりません。"
-  },
-  {
     "id": "model.config.is_valid.elastic_search.enable_searching.app_error",
     "translation": "Elasticsearch 検索有効化設定が有効に設定されている場合、Elasticsearchインデックス有効化設定は有効でなければなりません。"
   },

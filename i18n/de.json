@@ -3767,16 +3767,8 @@
     "translation": "Fehler beim Löschen des Kanals."
   },
   {
-    "id": "ent.elasticsearch.delete_channel.error",
-    "translation": "Fehler beim Löschen des Kanals."
-  },
-  {
     "id": "ent.elasticsearch.delete_post.error",
     "translation": "Fehler beim Löschen der Nachricht"
-  },
-  {
-    "id": "ent.elasticsearch.delete_user.error",
-    "translation": "Fehler beim Löschen des Benutzers."
   },
   {
     "id": "ent.elasticsearch.delete_user.error",
@@ -3793,10 +3785,6 @@
   {
     "id": "ent.elasticsearch.index_post.error",
     "translation": "Fehler beim Indizieren der Nachricht"
-  },
-  {
-    "id": "ent.elasticsearch.index_user.error",
-    "translation": "Fehler beim Indizieren der Benutzer."
   },
   {
     "id": "ent.elasticsearch.index_user.error",
@@ -3839,18 +3827,6 @@
     "translation": "Fehler beim Dekodieren der Suchergebnisse."
   },
   {
-    "id": "ent.elasticsearch.search_channels.disabled",
-    "translation": "ElasticSearch-Suche ist auf diesem Server deaktiviert."
-  },
-  {
-    "id": "ent.elasticsearch.search_channels.search_failed",
-    "translation": "Suche konnte nicht abgeschlossen werden."
-  },
-  {
-    "id": "ent.elasticsearch.search_channels.unmarshall_channel_failed",
-    "translation": "Fehler beim dekodieren der Suchergebnisse."
-  },
-  {
     "id": "ent.elasticsearch.search_posts.disabled",
     "translation": "ElasticSearch-Suche ist auf diesem Server deaktiviert"
   },
@@ -3873,14 +3849,6 @@
   {
     "id": "ent.elasticsearch.search_users.unmarshall_user_failed",
     "translation": "Fehler beim Dekodieren der Suchergebnisse."
-  },
-  {
-    "id": "ent.elasticsearch.search_users.search_failed",
-    "translation": "Suche konnte nicht abgeschlossen werden."
-  },
-  {
-    "id": "ent.elasticsearch.search_users.unmarshall_user_failed",
-    "translation": "Fehler beim dekodieren der Suchergebnisse."
   },
   {
     "id": "ent.elasticsearch.start.already_started.app_error",

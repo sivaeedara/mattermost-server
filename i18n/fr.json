@@ -4527,10 +4527,6 @@
     "translation": "Le paramètre IndexingEnabled doit être activé lorsque la propriété AutocompleteEnabled d'Elasticsearch est activée."
   },
   {
-    "id": "model.config.is_valid.elastic_search.enable_autocomplete.app_error",
-    "translation": "Le paramètre IndexingEnabled d'ElasticSearch doit être activé lorsque la propriété AutocompleteEnabled d'Elasticsearch est activée."
-  },
-  {
     "id": "model.config.is_valid.elastic_search.enable_searching.app_error",
     "translation": "Le paramètre IndexingEnabled doit être activé lorsque la propriété SearchEnabled d'Elasticsearch est activée."
   },

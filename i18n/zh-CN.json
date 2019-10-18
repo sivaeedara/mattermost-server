@@ -4527,10 +4527,6 @@
     "translation": "当 Elasticsearch AutocompleteEnabled 设为是时必须设定 Elasticsearch IndexingEnabled 为是。"
   },
   {
-    "id": "model.config.is_valid.elastic_search.enable_autocomplete.app_error",
-    "translation": "当 Elastic Search AutocompleteEnabled 设为是时必须设定 Elastic Search IndexingEnabled 为是。"
-  },
-  {
     "id": "model.config.is_valid.elastic_search.enable_searching.app_error",
     "translation": "当 Elasticsearch SearchEnabled 设为是时必须设定 Elasticsearch IndexingEnabled 为是。"
   },
