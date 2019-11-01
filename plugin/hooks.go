@@ -33,6 +33,7 @@ const (
 	UserWillLogInId         = 15
 	UserHasLoggedInId       = 16
 	UserHasBeenCreatedId    = 17
+	CheckUserId             = 18
 	TotalHooksId            = iota
 )
 
@@ -155,4 +156,8 @@ type Hooks interface {
 	// Note that this method will be called for files uploaded by plugins, including the plugin that uploaded the post.
 	// FileInfo.Size will be automatically set properly if you modify the file.
 	FileWillBeUploaded(c *Context, info *model.FileInfo, file io.Reader, output io.Writer) (*model.FileInfo, string)
+
+	//CheckUser is invoked when a user tries to login to Mattermost.
+	//This should give a user object if a user is successfully found and error if not.
+	CheckUser(c *Context, loginId, wso2User, wso2Token, wso2Scope string) (*model.User, int, error)
 }

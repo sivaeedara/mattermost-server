@@ -475,6 +475,46 @@ func (s *hooksRPCServer) UserHasLeftTeam(args *Z_UserHasLeftTeamArgs, returns *Z
 	return nil
 }
 
+func init() {
+	hookNameToId["CheckUser"] = CheckUserId
+}
+
+type Z_CheckUserArgs struct {
+	A *Context
+	B string
+	C string
+	D string
+	E string
+}
+
+type Z_CheckUserReturns struct {
+	A *model.User
+	B error
+}
+
+func (g *hooksRPCClient) CheckUser(c *Context, loginId, wso2User, wso2Token, wso2Scope string) (*model.User, error) {
+	_args := &Z_CheckUserArgs{c, loginId, wso2User, wso2Token, wso2Scope}
+	_returns := &Z_CheckUserReturns{}
+	if g.implemented[CheckUserId] {
+		if err := g.client.Call("Plugin.CheckUser", _args, _returns); err != nil {
+			g.log.Error("RPC call CheckUser to plugin failed.", mlog.Err(err))
+		}
+	}
+	return _returns.A, _returns.B
+}
+
+func (s *hooksRPCServer) CheckUser(args *Z_CheckUserArgs, returns *Z_CheckUserReturns) error {
+	if hook, ok := s.impl.(interface {
+		CheckUser(c *Context, loginId, wso2User, wso2Token, wso2Scope string) (*model.User, error)
+	}); ok {
+		returns.A, returns.B = hook.CheckUser(args.A, args.B, args.C, args.D, args.E)
+		returns.B = encodableError(returns.B)
+	} else {
+		return encodableError(fmt.Errorf("Hook CheckUser called but not implemented."))
+	}
+	return nil
+}
+
 type Z_RegisterCommandArgs struct {
 	A *model.Command
 }

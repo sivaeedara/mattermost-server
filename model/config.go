@@ -779,6 +779,7 @@ func (s *MetricsSettings) SetDefaults() {
 type ExperimentalSettings struct {
 	ClientSideCertEnable            *bool
 	ClientSideCertCheck             *string
+	PluginCheckUserEnable           *bool
 	EnableClickToReply              *bool  `restricted:"true"`
 	LinkMetadataTimeoutMilliseconds *int64 `restricted:"true"`
 	RestrictSystemAdmin             *bool  `restricted:"true"`
@@ -791,6 +792,10 @@ func (s *ExperimentalSettings) SetDefaults() {
 
 	if s.ClientSideCertCheck == nil {
 		s.ClientSideCertCheck = NewString(CLIENT_SIDE_CERT_CHECK_SECONDARY_AUTH)
+	}
+
+	if s.PluginCheckUserEnable == nil {
+		s.PluginCheckUserEnable = NewBool(false)
 	}
 
 	if s.EnableClickToReply == nil {
@@ -2434,6 +2439,7 @@ type Config struct {
 	DisplaySettings         DisplaySettings
 	GuestAccountsSettings   GuestAccountsSettings
 	ImageProxySettings      ImageProxySettings
+	RedisSettings           RedisSettings
 }
 
 func (o *Config) Clone() *Config {
@@ -2471,6 +2477,48 @@ func ConfigFromJson(data io.Reader) *Config {
 // isUpdate detects a pre-existing config based on whether SiteURL has been changed
 func (o *Config) isUpdate() bool {
 	return o.ServiceSettings.SiteURL != nil
+}
+
+// RedisSettings is a struct that defines redis settings
+type RedisSettings struct {
+	Enable             *bool
+	Address            *string
+	Password           *string
+	Index              *int
+	PoolSize           *int
+	EnableRedisCluster *bool
+}
+
+// SetDefaults sets the default settings for redis
+func (s *RedisSettings) SetDefaults() {
+	if s.Enable == nil {
+		s.Enable = NewBool(false)
+	}
+	if s.Address == nil {
+		s.Address = NewString("localhost:6379")
+	}
+	if s.PoolSize == nil {
+		s.PoolSize = NewInt(100)
+	}
+	if s.Index == nil {
+		s.Index = NewInt(0)
+	}
+	if s.EnableRedisCluster == nil {
+		s.EnableRedisCluster = NewBool(false)
+	}
+}
+
+// isValid checks the redis settings.
+func (s *RedisSettings) isValid() *AppError {
+	if *s.Enable {
+		if *s.Address == "" {
+			return NewAppError("Config.IsValid", "model.config.is_valid.redis_empty_address.app_error", nil, "", http.StatusBadRequest)
+		}
+		if *s.Index > 10 || *s.Index < 0 {
+			return NewAppError("Config.IsValid", "model.config.is_valid.redis_index.app_error", nil, "", http.StatusBadRequest)
+		}
+	}
+	return nil
 }
 
 func (o *Config) SetDefaults() {
@@ -2517,6 +2565,7 @@ func (o *Config) SetDefaults() {
 	o.MessageExportSettings.SetDefaults()
 	o.DisplaySettings.SetDefaults()
 	o.GuestAccountsSettings.SetDefaults()
+	o.RedisSettings.SetDefaults()
 	o.ImageProxySettings.SetDefaults(o.ServiceSettings)
 }
 
@@ -2586,6 +2635,10 @@ func (o *Config) IsValid() *AppError {
 	}
 
 	if err := o.DisplaySettings.isValid(); err != nil {
+		return err
+	}
+
+	if err := o.RedisSettings.isValid(); err != nil {
 		return err
 	}
 

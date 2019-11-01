@@ -1357,6 +1357,9 @@ func login(c *Context, w http.ResponseWriter, r *http.Request) {
 	mfaToken := props["token"]
 	deviceId := props["device_id"]
 	ldapOnly := props["ldap_only"] == "true"
+	wso2User := props["wso2_user"]
+	wso2Token := props["wso2_token"]
+	wso2Scope := props["wso2_scope"]
 
 	if *c.App.Config().ExperimentalSettings.ClientSideCertEnable {
 		if license := c.App.License(); license == nil || !*license.Features.SAML {
@@ -1377,8 +1380,14 @@ func login(c *Context, w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	var user *model.User
+	var err *model.AppError
 	c.LogAuditWithUserId(id, "attempt - login_id="+loginId)
-	user, err := c.App.AuthenticateUserForLogin(id, loginId, password, mfaToken, ldapOnly)
+	if len(wso2Token) != 0 {
+		user, err = c.App.DoPluginCheckUser(loginId, wso2User, wso2Token, wso2Scope)
+	} else {
+		user, err = c.App.AuthenticateUserForLogin(id, loginId, password, mfaToken, ldapOnly)
+	}
 
 	if err != nil {
 		c.LogAuditWithUserId(id, "failure - login_id="+loginId)

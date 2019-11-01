@@ -110,6 +110,30 @@ func (a *App) GetUserForLogin(id, loginId string) (*model.User, *model.AppError)
 	return nil, model.NewAppError("GetUserForLogin", "store.sql_user.get_for_login.app_error", nil, "", http.StatusBadRequest)
 }
 
+func (a *App) DoPluginCheckUser(loginId, wso2User, wso2Token, wso2Scope string) (*model.User, *model.AppError) {
+
+	// If we are given a userID then fail if we can't find a user with that ID
+	if len(wso2User) == 0 || len(loginId) == 0 || len(wso2Token) == 0 || len(wso2Scope) == 0 {
+		return nil, model.NewAppError("DoPluginCheckUser", "plugin.check_user.get_for_login.app_error", nil, "Length is zero", http.StatusBadRequest)
+	}
+
+	if pluginsEnvironment := a.GetPluginsEnvironment(); pluginsEnvironment != nil {
+		var user *model.User
+		var err error
+		var statusCode int
+		pluginContext := a.PluginContext()
+		pluginsEnvironment.RunMultiPluginHook(func(hooks plugin.Hooks) bool {
+			user,statusCode, err = hooks.CheckUser(pluginContext, loginId, wso2User, wso2Token, wso2Scope)
+			return true
+		}, plugin.CheckUserId)
+		if err != nil {
+			return user, nil
+		}
+		return user, model.NewAppError("DoPluginCheckUser", "plugin.check_user.get_for_login.app_error", nil, err.Error(), statusCode)
+	}
+	return nil, model.NewAppError("DoPluginCheckUser", "plugin.check_user.get_for_login.app_error", nil, "No plugin to server CheckUser", http.StatusInternalServerError)
+}
+
 func (a *App) DoLogin(w http.ResponseWriter, r *http.Request, user *model.User, deviceId string) (*model.Session, *model.AppError) {
 	if pluginsEnvironment := a.GetPluginsEnvironment(); pluginsEnvironment != nil {
 		var rejectionReason string
