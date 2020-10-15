@@ -1,4 +1,4 @@
-# Clustering Mattermost (version 5.6.0) using Redis
+# Clustering Mattermost (version 5.27.0) using Redis
 
 ## For those who are using Mattermost Team Edition finding a solution of clustering Mattermost. This project would help you.
 
