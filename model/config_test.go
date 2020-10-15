@@ -1,9 +1,10 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
-// See License.txt for license information.
+// See LICENSE.txt for license information.
 
 package model
 
 import (
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"testing"
@@ -63,8 +64,31 @@ func TestConfigEmptySiteName(t *testing.T) {
 	}
 	c1.SetDefaults()
 
-	if *c1.TeamSettings.SiteName != TEAM_SETTINGS_DEFAULT_SITE_NAME {
-		t.Fatal("TeamSettings.SiteName should default to " + TEAM_SETTINGS_DEFAULT_SITE_NAME)
+	require.Equal(t, *c1.TeamSettings.SiteName, TEAM_SETTINGS_DEFAULT_SITE_NAME)
+}
+
+func TestConfigEnableDeveloper(t *testing.T) {
+	testCases := []struct {
+		Description     string
+		EnableDeveloper *bool
+		ExpectedSiteURL string
+	}{
+		{"enable developer is true", NewBool(true), SERVICE_SETTINGS_DEFAULT_SITE_URL},
+		{"enable developer is false", NewBool(false), ""},
+		{"enable developer is nil", nil, ""},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.Description, func(t *testing.T) {
+			c1 := Config{
+				ServiceSettings: ServiceSettings{
+					EnableDeveloper: testCase.EnableDeveloper,
+				},
+			}
+			c1.SetDefaults()
+
+			require.Equal(t, testCase.ExpectedSiteURL, *c1.ServiceSettings.SiteURL)
+		})
 	}
 }
 
@@ -72,36 +96,148 @@ func TestConfigDefaultFileSettingsDirectory(t *testing.T) {
 	c1 := Config{}
 	c1.SetDefaults()
 
-	if *c1.FileSettings.Directory != "./data/" {
-		t.Fatal("FileSettings.Directory should default to './data/'")
-	}
+	require.Equal(t, *c1.FileSettings.Directory, "./data/")
 }
 
 func TestConfigDefaultEmailNotificationContentsType(t *testing.T) {
 	c1 := Config{}
 	c1.SetDefaults()
 
-	if *c1.EmailSettings.EmailNotificationContentsType != EMAIL_NOTIFICATION_CONTENTS_FULL {
-		t.Fatal("EmailSettings.EmailNotificationContentsType should default to 'full'")
-	}
+	require.Equal(t, *c1.EmailSettings.EmailNotificationContentsType, EMAIL_NOTIFICATION_CONTENTS_FULL)
 }
 
 func TestConfigDefaultFileSettingsS3SSE(t *testing.T) {
 	c1 := Config{}
 	c1.SetDefaults()
 
-	if *c1.FileSettings.AmazonS3SSE {
-		t.Fatal("FileSettings.AmazonS3SSE should default to false")
+	require.False(t, *c1.FileSettings.AmazonS3SSE)
+}
+
+func TestConfigDefaultSignatureAlgorithm(t *testing.T) {
+	c1 := Config{}
+	c1.SetDefaults()
+
+	require.Equal(t, *c1.SamlSettings.SignatureAlgorithm, SAML_SETTINGS_DEFAULT_SIGNATURE_ALGORITHM)
+	require.Equal(t, *c1.SamlSettings.CanonicalAlgorithm, SAML_SETTINGS_DEFAULT_CANONICAL_ALGORITHM)
+}
+
+func TestConfigOverwriteSignatureAlgorithm(t *testing.T) {
+	const testAlgorithm = "FakeAlgorithm"
+	c1 := Config{
+		SamlSettings: SamlSettings{
+			CanonicalAlgorithm: NewString(testAlgorithm),
+			SignatureAlgorithm: NewString(testAlgorithm),
+		},
 	}
+
+	c1.SetDefaults()
+
+	require.Equal(t, *c1.SamlSettings.SignatureAlgorithm, testAlgorithm)
+	require.Equal(t, *c1.SamlSettings.CanonicalAlgorithm, testAlgorithm)
+}
+
+func TestConfigIsValidDefaultAlgorithms(t *testing.T) {
+	c1 := Config{}
+	c1.SetDefaults()
+
+	*c1.SamlSettings.Enable = true
+	*c1.SamlSettings.Verify = false
+	*c1.SamlSettings.Encrypt = false
+
+	*c1.SamlSettings.IdpUrl = "http://test.url.com"
+	*c1.SamlSettings.IdpDescriptorUrl = "http://test.url.com"
+	*c1.SamlSettings.IdpCertificateFile = "certificatefile"
+	*c1.SamlSettings.ServiceProviderIdentifier = "http://test.url.com"
+	*c1.SamlSettings.EmailAttribute = "Email"
+	*c1.SamlSettings.UsernameAttribute = "Username"
+
+	err := c1.SamlSettings.isValid()
+	require.Nil(t, err)
+}
+
+func TestConfigServiceProviderDefault(t *testing.T) {
+	c1 := &Config{
+		SamlSettings: *&SamlSettings{
+			Enable:             NewBool(true),
+			Verify:             NewBool(false),
+			Encrypt:            NewBool(false),
+			IdpUrl:             NewString("http://test.url.com"),
+			IdpDescriptorUrl:   NewString("http://test2.url.com"),
+			IdpCertificateFile: NewString("certificatefile"),
+			EmailAttribute:     NewString("Email"),
+			UsernameAttribute:  NewString("Username"),
+		},
+	}
+
+	c1.SetDefaults()
+	assert.Equal(t, *c1.SamlSettings.ServiceProviderIdentifier, *c1.SamlSettings.IdpDescriptorUrl)
+
+	err := c1.SamlSettings.isValid()
+	require.Nil(t, err)
+}
+
+func TestConfigIsValidFakeAlgorithm(t *testing.T) {
+	c1 := Config{}
+	c1.SetDefaults()
+
+	*c1.SamlSettings.Enable = true
+	*c1.SamlSettings.Verify = false
+	*c1.SamlSettings.Encrypt = false
+
+	*c1.SamlSettings.IdpUrl = "http://test.url.com"
+	*c1.SamlSettings.IdpDescriptorUrl = "http://test.url.com"
+	*c1.SamlSettings.IdpMetadataUrl = "http://test.url.com"
+	*c1.SamlSettings.IdpCertificateFile = "certificatefile"
+	*c1.SamlSettings.ServiceProviderIdentifier = "http://test.url.com"
+	*c1.SamlSettings.EmailAttribute = "Email"
+	*c1.SamlSettings.UsernameAttribute = "Username"
+
+	temp := *c1.SamlSettings.CanonicalAlgorithm
+	*c1.SamlSettings.CanonicalAlgorithm = "Fake Algorithm"
+	err := c1.SamlSettings.isValid()
+	require.NotNil(t, err)
+
+	require.Equal(t, "model.config.is_valid.saml_canonical_algorithm.app_error", err.Message)
+	*c1.SamlSettings.CanonicalAlgorithm = temp
+
+	*c1.SamlSettings.SignatureAlgorithm = "Fake Algorithm"
+	err = c1.SamlSettings.isValid()
+	require.NotNil(t, err)
+
+	require.Equal(t, "model.config.is_valid.saml_signature_algorithm.app_error", err.Message)
+}
+
+func TestConfigOverwriteGuestSettings(t *testing.T) {
+	const attribute = "FakeAttributeName"
+	c1 := Config{
+		SamlSettings: SamlSettings{
+			GuestAttribute: NewString(attribute),
+		},
+	}
+
+	c1.SetDefaults()
+
+	require.Equal(t, *c1.SamlSettings.GuestAttribute, attribute)
+}
+
+func TestConfigOverwriteAdminSettings(t *testing.T) {
+	const attribute = "FakeAttributeName"
+	c1 := Config{
+		SamlSettings: SamlSettings{
+			AdminAttribute: NewString(attribute),
+		},
+	}
+
+	c1.SetDefaults()
+
+	require.Equal(t, *c1.SamlSettings.AdminAttribute, attribute)
 }
 
 func TestConfigDefaultServiceSettingsExperimentalGroupUnreadChannels(t *testing.T) {
 	c1 := Config{}
 	c1.SetDefaults()
 
-	if *c1.ServiceSettings.ExperimentalGroupUnreadChannels != GROUP_UNREAD_CHANNELS_DISABLED {
-		t.Fatal("ServiceSettings.ExperimentalGroupUnreadChannels should default to 'disabled'")
-	}
+	require.Equal(t, *c1.ServiceSettings.ExperimentalGroupUnreadChannels, GROUP_UNREAD_CHANNELS_DISABLED)
 
 	// This setting was briefly a boolean, so ensure that those values still work as expected
 	c1 = Config{
@@ -111,9 +247,7 @@ func TestConfigDefaultServiceSettingsExperimentalGroupUnreadChannels(t *testing.
 	}
 	c1.SetDefaults()
 
-	if *c1.ServiceSettings.ExperimentalGroupUnreadChannels != GROUP_UNREAD_CHANNELS_DEFAULT_ON {
-		t.Fatal("ServiceSettings.ExperimentalGroupUnreadChannels should set true to 'default on'")
-	}
+	require.Equal(t, *c1.ServiceSettings.ExperimentalGroupUnreadChannels, GROUP_UNREAD_CHANNELS_DEFAULT_ON)
 
 	c1 = Config{
 		ServiceSettings: ServiceSettings{
@@ -122,24 +256,81 @@ func TestConfigDefaultServiceSettingsExperimentalGroupUnreadChannels(t *testing.
 	}
 	c1.SetDefaults()
 
-	if *c1.ServiceSettings.ExperimentalGroupUnreadChannels != GROUP_UNREAD_CHANNELS_DISABLED {
-		t.Fatal("ServiceSettings.ExperimentalGroupUnreadChannels should set false to 'disabled'")
-	}
+	require.Equal(t, *c1.ServiceSettings.ExperimentalGroupUnreadChannels, GROUP_UNREAD_CHANNELS_DISABLED)
 }
 
 func TestConfigDefaultNPSPluginState(t *testing.T) {
-	c1 := Config{}
-	c1.SetDefaults()
+	t.Run("should enable NPS plugin by default", func(t *testing.T) {
+		c1 := Config{}
+		c1.SetDefaults()
 
-	if c1.PluginSettings.PluginStates["com.mattermost.nps"].Enable != true {
-		t.Fatal("PluginSettings.PluginStates[\"com.mattermost.nps\"].Enable should default to true")
-	}
+		assert.True(t, c1.PluginSettings.PluginStates["com.mattermost.nps"].Enable)
+	})
 
-	c1.PluginSettings.PluginStates["com.mattermost.nps"].Enable = false
-	c1.SetDefaults()
-	if c1.PluginSettings.PluginStates["com.mattermost.nps"].Enable != false {
-		t.Fatal("PluginSettings.PluginStates[\"com.mattermost.nps\"].Enable should remain false")
-	}
+	t.Run("should enable NPS plugin if diagnostics are enabled", func(t *testing.T) {
+		c1 := Config{
+			LogSettings: LogSettings{
+				EnableDiagnostics: NewBool(true),
+			},
+		}
+
+		c1.SetDefaults()
+
+		assert.True(t, c1.PluginSettings.PluginStates["com.mattermost.nps"].Enable)
+	})
+
+	t.Run("should not enable NPS plugin if diagnostics are disabled", func(t *testing.T) {
+		c1 := Config{
+			LogSettings: LogSettings{
+				EnableDiagnostics: NewBool(false),
+			},
+		}
+
+		c1.SetDefaults()
+
+		assert.False(t, c1.PluginSettings.PluginStates["com.mattermost.nps"].Enable)
+	})
+
+	t.Run("should not re-enable NPS plugin after it has been disabled", func(t *testing.T) {
+		c1 := Config{
+			PluginSettings: PluginSettings{
+				PluginStates: map[string]*PluginState{
+					"com.mattermost.nps": {
+						Enable: false,
+					},
+				},
+			},
+		}
+
+		c1.SetDefaults()
+
+		assert.False(t, c1.PluginSettings.PluginStates["com.mattermost.nps"].Enable)
+	})
+}
+
+func TestConfigDefaultIncidentResponsePluginState(t *testing.T) {
+	t.Run("should enable IncidentResponse plugin by default", func(t *testing.T) {
+		c1 := Config{}
+		c1.SetDefaults()
+
+		assert.True(t, c1.PluginSettings.PluginStates["com.mattermost.plugin-incident-response"].Enable)
+	})
+
+	t.Run("should not re-enable IncidentResponse plugin after it has been disabled", func(t *testing.T) {
+		c1 := Config{
+			PluginSettings: PluginSettings{
+				PluginStates: map[string]*PluginState{
+					"com.mattermost.plugin-incident-response": {
+						Enable: false,
+					},
+				},
+			},
+		}
+
+		c1.SetDefaults()
+
+		assert.False(t, c1.PluginSettings.PluginStates["com.mattermost.plugin-incident-response"].Enable)
+	})
 }
 
 func TestTeamSettingsIsValidSiteNameEmpty(t *testing.T) {
@@ -147,11 +338,8 @@ func TestTeamSettingsIsValidSiteNameEmpty(t *testing.T) {
 	c1.SetDefaults()
 	c1.TeamSettings.SiteName = NewString("")
 
-	// should fail fast because ts.SiteName is not set
-	err := c1.TeamSettings.isValid()
-	if err == nil {
-		t.Fatal("TeamSettings validation should fail with an empty SiteName")
-	}
+	// should not fail if ts.SiteName is not set, defaults are used
+	require.Nil(t, c1.TeamSettings.isValid())
 }
 
 func TestMessageExportSettingsIsValidEnableExportNotSet(t *testing.T) {
@@ -509,7 +697,7 @@ func TestDisplaySettingsIsValidCustomUrlSchemes(t *testing.T) {
 		{
 			name:  "containing period",
 			value: []string{"iris.beep"},
-			valid: false, // should technically be true, but client doesn't support it
+			valid: true,
 		},
 		{
 			name:  "containing hyphen",
@@ -519,7 +707,7 @@ func TestDisplaySettingsIsValidCustomUrlSchemes(t *testing.T) {
 		{
 			name:  "containing plus",
 			value: []string{"coap+tcp", "coap+ws"},
-			valid: false, // should technically be true, but client doesn't support it
+			valid: true,
 		},
 		{
 			name:  "starting with number",
@@ -593,7 +781,7 @@ func TestListenAddressIsValidated(t *testing.T) {
 		ss := &ServiceSettings{
 			ListenAddress: NewString(key),
 		}
-		ss.SetDefaults()
+		ss.SetDefaults(true)
 		if expected {
 			require.Nil(t, ss.isValid(), fmt.Sprintf("Got an error from '%v'.", key))
 		} else {
@@ -869,6 +1057,204 @@ func TestLdapSettingsIsValid(t *testing.T) {
 			},
 			ExpectError: true,
 		},
+
+		{
+			Name: "valid guest filter #1",
+			LdapSettings: LdapSettings{
+				Enable:            NewBool(true),
+				LdapServer:        NewString("server"),
+				BaseDN:            NewString("basedn"),
+				EmailAttribute:    NewString("email"),
+				UsernameAttribute: NewString("username"),
+				IdAttribute:       NewString("id"),
+				LoginIdAttribute:  NewString("loginid"),
+				GuestFilter:       NewString("(property=value)"),
+			},
+			ExpectError: false,
+		},
+		{
+			Name: "invalid guest filter #1",
+			LdapSettings: LdapSettings{
+				Enable:            NewBool(true),
+				LdapServer:        NewString("server"),
+				BaseDN:            NewString("basedn"),
+				EmailAttribute:    NewString("email"),
+				UsernameAttribute: NewString("username"),
+				IdAttribute:       NewString("id"),
+				LoginIdAttribute:  NewString("loginid"),
+				GuestFilter:       NewString("("),
+			},
+			ExpectError: true,
+		},
+		{
+			Name: "invalid guest filter #2",
+			LdapSettings: LdapSettings{
+				Enable:            NewBool(true),
+				LdapServer:        NewString("server"),
+				BaseDN:            NewString("basedn"),
+				EmailAttribute:    NewString("email"),
+				UsernameAttribute: NewString("username"),
+				IdAttribute:       NewString("id"),
+				LoginIdAttribute:  NewString("loginid"),
+				GuestFilter:       NewString("()"),
+			},
+			ExpectError: true,
+		},
+		{
+			Name: "valid guest filter #2",
+			LdapSettings: LdapSettings{
+				Enable:            NewBool(true),
+				LdapServer:        NewString("server"),
+				BaseDN:            NewString("basedn"),
+				EmailAttribute:    NewString("email"),
+				UsernameAttribute: NewString("username"),
+				IdAttribute:       NewString("id"),
+				LoginIdAttribute:  NewString("loginid"),
+				GuestFilter:       NewString("(&(property=value)(otherthing=othervalue))"),
+			},
+			ExpectError: false,
+		},
+		{
+			Name: "valid guest filter #3",
+			LdapSettings: LdapSettings{
+				Enable:            NewBool(true),
+				LdapServer:        NewString("server"),
+				BaseDN:            NewString("basedn"),
+				EmailAttribute:    NewString("email"),
+				UsernameAttribute: NewString("username"),
+				IdAttribute:       NewString("id"),
+				LoginIdAttribute:  NewString("loginid"),
+				GuestFilter:       NewString("(&(property=value)(|(otherthing=othervalue)(other=thing)))"),
+			},
+			ExpectError: false,
+		},
+		{
+			Name: "invalid guest filter #3",
+			LdapSettings: LdapSettings{
+				Enable:            NewBool(true),
+				LdapServer:        NewString("server"),
+				BaseDN:            NewString("basedn"),
+				EmailAttribute:    NewString("email"),
+				UsernameAttribute: NewString("username"),
+				IdAttribute:       NewString("id"),
+				LoginIdAttribute:  NewString("loginid"),
+				GuestFilter:       NewString("(&(property=value)(|(otherthing=othervalue)(other=thing))"),
+			},
+			ExpectError: true,
+		},
+		{
+			Name: "invalid guest filter #4",
+			LdapSettings: LdapSettings{
+				Enable:            NewBool(true),
+				LdapServer:        NewString("server"),
+				BaseDN:            NewString("basedn"),
+				EmailAttribute:    NewString("email"),
+				UsernameAttribute: NewString("username"),
+				IdAttribute:       NewString("id"),
+				LoginIdAttribute:  NewString("loginid"),
+				GuestFilter:       NewString("(&(property=value)((otherthing=othervalue)(other=thing)))"),
+			},
+			ExpectError: true,
+		},
+
+		{
+			Name: "valid Admin filter #1",
+			LdapSettings: LdapSettings{
+				Enable:            NewBool(true),
+				LdapServer:        NewString("server"),
+				BaseDN:            NewString("basedn"),
+				EmailAttribute:    NewString("email"),
+				UsernameAttribute: NewString("username"),
+				IdAttribute:       NewString("id"),
+				LoginIdAttribute:  NewString("loginid"),
+				AdminFilter:       NewString("(property=value)"),
+			},
+			ExpectError: false,
+		},
+		{
+			Name: "invalid Admin filter #1",
+			LdapSettings: LdapSettings{
+				Enable:            NewBool(true),
+				LdapServer:        NewString("server"),
+				BaseDN:            NewString("basedn"),
+				EmailAttribute:    NewString("email"),
+				UsernameAttribute: NewString("username"),
+				IdAttribute:       NewString("id"),
+				LoginIdAttribute:  NewString("loginid"),
+				AdminFilter:       NewString("("),
+			},
+			ExpectError: true,
+		},
+		{
+			Name: "invalid Admin filter #2",
+			LdapSettings: LdapSettings{
+				Enable:            NewBool(true),
+				LdapServer:        NewString("server"),
+				BaseDN:            NewString("basedn"),
+				EmailAttribute:    NewString("email"),
+				UsernameAttribute: NewString("username"),
+				IdAttribute:       NewString("id"),
+				LoginIdAttribute:  NewString("loginid"),
+				AdminFilter:       NewString("()"),
+			},
+			ExpectError: true,
+		},
+		{
+			Name: "valid Admin filter #2",
+			LdapSettings: LdapSettings{
+				Enable:            NewBool(true),
+				LdapServer:        NewString("server"),
+				BaseDN:            NewString("basedn"),
+				EmailAttribute:    NewString("email"),
+				UsernameAttribute: NewString("username"),
+				IdAttribute:       NewString("id"),
+				LoginIdAttribute:  NewString("loginid"),
+				AdminFilter:       NewString("(&(property=value)(otherthing=othervalue))"),
+			},
+			ExpectError: false,
+		},
+		{
+			Name: "valid Admin filter #3",
+			LdapSettings: LdapSettings{
+				Enable:            NewBool(true),
+				LdapServer:        NewString("server"),
+				BaseDN:            NewString("basedn"),
+				EmailAttribute:    NewString("email"),
+				UsernameAttribute: NewString("username"),
+				IdAttribute:       NewString("id"),
+				LoginIdAttribute:  NewString("loginid"),
+				AdminFilter:       NewString("(&(property=value)(|(otherthing=othervalue)(other=thing)))"),
+			},
+			ExpectError: false,
+		},
+		{
+			Name: "invalid Admin filter #3",
+			LdapSettings: LdapSettings{
+				Enable:            NewBool(true),
+				LdapServer:        NewString("server"),
+				BaseDN:            NewString("basedn"),
+				EmailAttribute:    NewString("email"),
+				UsernameAttribute: NewString("username"),
+				IdAttribute:       NewString("id"),
+				LoginIdAttribute:  NewString("loginid"),
+				AdminFilter:       NewString("(&(property=value)(|(otherthing=othervalue)(other=thing))"),
+			},
+			ExpectError: true,
+		},
+		{
+			Name: "invalid Admin filter #4",
+			LdapSettings: LdapSettings{
+				Enable:            NewBool(true),
+				LdapServer:        NewString("server"),
+				BaseDN:            NewString("basedn"),
+				EmailAttribute:    NewString("email"),
+				UsernameAttribute: NewString("username"),
+				IdAttribute:       NewString("id"),
+				LoginIdAttribute:  NewString("loginid"),
+				AdminFilter:       NewString("(&(property=value)((otherthing=othervalue)(other=thing)))"),
+			},
+			ExpectError: true,
+		},
 	} {
 		t.Run(test.Name, func(t *testing.T) {
 			test.LdapSettings.SetDefaults()
@@ -881,4 +1267,125 @@ func TestLdapSettingsIsValid(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestConfigSanitize(t *testing.T) {
+	c := Config{}
+	c.SetDefaults()
+
+	*c.LdapSettings.BindPassword = "foo"
+	*c.FileSettings.AmazonS3SecretAccessKey = "bar"
+	*c.EmailSettings.SMTPPassword = "baz"
+	*c.GitLabSettings.Secret = "bingo"
+	c.SqlSettings.DataSourceReplicas = []string{"stuff"}
+	c.SqlSettings.DataSourceSearchReplicas = []string{"stuff"}
+
+	c.Sanitize()
+
+	assert.Equal(t, FAKE_SETTING, *c.LdapSettings.BindPassword)
+	assert.Equal(t, FAKE_SETTING, *c.FileSettings.PublicLinkSalt)
+	assert.Equal(t, FAKE_SETTING, *c.FileSettings.AmazonS3SecretAccessKey)
+	assert.Equal(t, FAKE_SETTING, *c.EmailSettings.SMTPPassword)
+	assert.Equal(t, FAKE_SETTING, *c.GitLabSettings.Secret)
+	assert.Equal(t, FAKE_SETTING, *c.SqlSettings.DataSource)
+	assert.Equal(t, FAKE_SETTING, *c.SqlSettings.AtRestEncryptKey)
+	assert.Equal(t, FAKE_SETTING, *c.ElasticsearchSettings.Password)
+	assert.Equal(t, FAKE_SETTING, c.SqlSettings.DataSourceReplicas[0])
+	assert.Equal(t, FAKE_SETTING, c.SqlSettings.DataSourceSearchReplicas[0])
+}
+
+func TestConfigFilteredByTag(t *testing.T) {
+	c := Config{}
+	c.SetDefaults()
+
+	cfgMap := structToMapFilteredByTag(c, ConfigAccessTagType, ConfigAccessTagCloudRestrictable)
+
+	// Remove entire sections but the map is still there
+	clusterSettings, ok := cfgMap["SqlSettings"].(map[string]interface{})
+	require.True(t, ok)
+	require.Equal(t, 0, len(clusterSettings))
+
+	// Some fields are removed if they have the filtering tag
+	serviceSettings, ok := cfgMap["ServiceSettings"].(map[string]interface{})
+	require.True(t, ok)
+	_, ok = serviceSettings["ListenAddress"]
+	require.False(t, ok)
+}
+
+func TestConfigToJSONFiltered(t *testing.T) {
+	c := Config{}
+	c.SetDefaults()
+
+	jsonCfgFiltered := c.ToJsonFiltered(ConfigAccessTagType, ConfigAccessTagCloudRestrictable)
+
+	unmarshaledCfg := make(map[string]json.RawMessage)
+	err := json.Unmarshal([]byte(jsonCfgFiltered), &unmarshaledCfg)
+	require.NoError(t, err)
+
+	_, ok := unmarshaledCfg["SqlSettings"]
+	require.False(t, ok)
+
+	serviceSettingsRaw, ok := unmarshaledCfg["ServiceSettings"]
+	require.True(t, ok)
+
+	unmarshaledServiceSettings := make(map[string]json.RawMessage)
+	err = json.Unmarshal([]byte(serviceSettingsRaw), &unmarshaledServiceSettings)
+	require.NoError(t, err)
+
+	_, ok = unmarshaledServiceSettings["ListenAddress"]
+	require.False(t, ok)
+	_, ok = unmarshaledServiceSettings["SiteURL"]
+	require.True(t, ok)
+}
+
+func TestConfigMarketplaceDefaults(t *testing.T) {
+	t.Parallel()
+
+	t.Run("no marketplace url", func(t *testing.T) {
+		c := Config{}
+		c.SetDefaults()
+
+		require.True(t, *c.PluginSettings.EnableMarketplace)
+		require.Equal(t, PLUGIN_SETTINGS_DEFAULT_MARKETPLACE_URL, *c.PluginSettings.MarketplaceUrl)
+	})
+
+	t.Run("old marketplace url", func(t *testing.T) {
+		c := Config{}
+		c.SetDefaults()
+
+		*c.PluginSettings.MarketplaceUrl = PLUGIN_SETTINGS_OLD_MARKETPLACE_URL
+		c.SetDefaults()
+
+		require.True(t, *c.PluginSettings.EnableMarketplace)
+		require.Equal(t, PLUGIN_SETTINGS_DEFAULT_MARKETPLACE_URL, *c.PluginSettings.MarketplaceUrl)
+	})
+
+	t.Run("custom marketplace url", func(t *testing.T) {
+		c := Config{}
+		c.SetDefaults()
+
+		*c.PluginSettings.MarketplaceUrl = "https://marketplace.example.com"
+		c.SetDefaults()
+
+		require.True(t, *c.PluginSettings.EnableMarketplace)
+		require.Equal(t, "https://marketplace.example.com", *c.PluginSettings.MarketplaceUrl)
+	})
+}
+
+func TestSetDefaultFeatureFlagBehaviour(t *testing.T) {
+	cfg := Config{}
+	cfg.SetDefaults()
+
+	require.NotNil(t, cfg.FeatureFlags)
+	require.Equal(t, "off", cfg.FeatureFlags.TestFeature)
+
+	cfg = Config{
+		FeatureFlags: &FeatureFlags{
+			TestFeature: "somevalue",
+		},
+	}
+	cfg.SetDefaults()
+	require.NotNil(t, cfg.FeatureFlags)
+	require.Equal(t, "somevalue", cfg.FeatureFlags.TestFeature)
+
 }

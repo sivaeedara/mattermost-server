@@ -1,12 +1,13 @@
-// Copyright (c) 2017-present Mattermost, Inc. All Rights Reserved.
-// See License.txt for license information.
+// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// See LICENSE.txt for license information.
 
 package app
 
 import (
+	"errors"
 	"net/http"
 
-	"github.com/mattermost/mattermost-server/model"
+	"github.com/mattermost/mattermost-server/v5/model"
 )
 
 func (a *App) SaveReactionForPost(reaction *model.Reaction) (*model.Reaction, *model.AppError) {
@@ -24,8 +25,9 @@ func (a *App) SaveReactionForPost(reaction *model.Reaction) (*model.Reaction, *m
 		return nil, model.NewAppError("deleteReactionForPost", "api.reaction.save.archived_channel.app_error", nil, "", http.StatusForbidden)
 	}
 
-	if a.License() != nil && *a.Config().TeamSettings.ExperimentalTownSquareIsReadOnly && channel.Name == model.DEFAULT_CHANNEL {
-		user, err := a.GetUser(reaction.UserId)
+	if a.Srv().License() != nil && *a.Config().TeamSettings.ExperimentalTownSquareIsReadOnly && channel.Name == model.DEFAULT_CHANNEL {
+		var user *model.User
+		user, err = a.GetUser(reaction.UserId)
 		if err != nil {
 			return nil, err
 		}
@@ -35,17 +37,21 @@ func (a *App) SaveReactionForPost(reaction *model.Reaction) (*model.Reaction, *m
 		}
 	}
 
-	result := <-a.Srv.Store.Reaction().Save(reaction)
-	if result.Err != nil {
-		return nil, result.Err
+	reaction, nErr := a.Srv().Store.Reaction().Save(reaction)
+	if nErr != nil {
+		var appErr *model.AppError
+		switch {
+		case errors.As(nErr, &appErr):
+			return nil, appErr
+		default:
+			return nil, model.NewAppError("SaveReactionForPost", "app.reaction.save.save.app_error", nil, nErr.Error(), http.StatusInternalServerError)
+		}
 	}
 
-	reaction = result.Data.(*model.Reaction)
-
 	// The post is always modified since the UpdateAt always changes
-	a.InvalidateCacheForChannelPosts(post.ChannelId)
+	a.invalidateCacheForChannelPosts(post.ChannelId)
 
-	a.Srv.Go(func() {
+	a.Srv().Go(func() {
 		a.sendReactionEvent(model.WEBSOCKET_EVENT_REACTION_ADDED, reaction, post, true)
 	})
 
@@ -53,22 +59,21 @@ func (a *App) SaveReactionForPost(reaction *model.Reaction) (*model.Reaction, *m
 }
 
 func (a *App) GetReactionsForPost(postId string) ([]*model.Reaction, *model.AppError) {
-	result := <-a.Srv.Store.Reaction().GetForPost(postId, true)
-	if result.Err != nil {
-		return nil, result.Err
+	reactions, err := a.Srv().Store.Reaction().GetForPost(postId, true)
+	if err != nil {
+		return nil, model.NewAppError("GetReactionsForPost", "app.reaction.get_for_post.app_error", nil, err.Error(), http.StatusInternalServerError)
 	}
-	return result.Data.([]*model.Reaction), nil
+	return reactions, nil
 }
 
 func (a *App) GetBulkReactionsForPosts(postIds []string) (map[string][]*model.Reaction, *model.AppError) {
 	reactions := make(map[string][]*model.Reaction)
 
-	result := <-a.Srv.Store.Reaction().BulkGetForPosts(postIds)
-	if result.Err != nil {
-		return nil, result.Err
+	allReactions, err := a.Srv().Store.Reaction().BulkGetForPosts(postIds)
+	if err != nil {
+		return nil, model.NewAppError("GetBulkReactionsForPosts", "app.reaction.bulk_get_for_post_ids.app_error", nil, err.Error(), http.StatusInternalServerError)
 	}
 
-	allReactions := result.Data.([]*model.Reaction)
 	for _, reaction := range allReactions {
 		reactionsForPost := reactions[reaction.PostId]
 		reactionsForPost = append(reactionsForPost, reaction)
@@ -101,17 +106,17 @@ func (a *App) DeleteReactionForPost(reaction *model.Reaction) *model.AppError {
 	}
 
 	if channel.DeleteAt > 0 {
-		return model.NewAppError("deleteReactionForPost", "api.reaction.delete.archived_channel.app_error", nil, "", http.StatusForbidden)
+		return model.NewAppError("DeleteReactionForPost", "api.reaction.delete.archived_channel.app_error", nil, "", http.StatusForbidden)
 	}
 
-	if a.License() != nil && *a.Config().TeamSettings.ExperimentalTownSquareIsReadOnly && channel.Name == model.DEFAULT_CHANNEL {
+	if a.Srv().License() != nil && *a.Config().TeamSettings.ExperimentalTownSquareIsReadOnly && channel.Name == model.DEFAULT_CHANNEL {
 		user, err := a.GetUser(reaction.UserId)
 		if err != nil {
 			return err
 		}
 
 		if !a.RolesGrantPermission(user.GetRoles(), model.PERMISSION_MANAGE_SYSTEM.Id) {
-			return model.NewAppError("deleteReactionForPost", "api.reaction.town_square_read_only", nil, "", http.StatusForbidden)
+			return model.NewAppError("DeleteReactionForPost", "api.reaction.town_square_read_only", nil, "", http.StatusForbidden)
 		}
 	}
 
@@ -120,14 +125,14 @@ func (a *App) DeleteReactionForPost(reaction *model.Reaction) *model.AppError {
 		hasReactions = false
 	}
 
-	if result := <-a.Srv.Store.Reaction().Delete(reaction); result.Err != nil {
-		return result.Err
+	if _, err := a.Srv().Store.Reaction().Delete(reaction); err != nil {
+		return model.NewAppError("DeleteReactionForPost", "app.reaction.delete_all_with_emoji_name.get_reactions.app_error", nil, err.Error(), http.StatusInternalServerError)
 	}
 
 	// The post is always modified since the UpdateAt always changes
-	a.InvalidateCacheForChannelPosts(post.ChannelId)
+	a.invalidateCacheForChannelPosts(post.ChannelId)
 
-	a.Srv.Go(func() {
+	a.Srv().Go(func() {
 		a.sendReactionEvent(model.WEBSOCKET_EVENT_REACTION_REMOVED, reaction, post, hasReactions)
 	})
 
@@ -139,13 +144,4 @@ func (a *App) sendReactionEvent(event string, reaction *model.Reaction, post *mo
 	message := model.NewWebSocketEvent(event, "", post.ChannelId, "", nil)
 	message.Add("reaction", reaction.ToJson())
 	a.Publish(message)
-
-	post.HasReactions = hasReactions
-	post.UpdateAt = model.GetMillis()
-
-	clientPost := a.PreparePostForClient(post, false)
-
-	umessage := model.NewWebSocketEvent(model.WEBSOCKET_EVENT_POST_EDITED, "", post.ChannelId, "", nil)
-	umessage.Add("post", clientPost.ToJson())
-	a.Publish(umessage)
 }

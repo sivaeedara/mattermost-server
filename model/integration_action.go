@@ -1,5 +1,5 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
-// See License.txt for license information.
+// See LICENSE.txt for license information.
 
 package model
 
@@ -16,6 +16,7 @@ import (
 	"io"
 	"math/big"
 	"net/http"
+	"reflect"
 	"strconv"
 	"strings"
 )
@@ -26,7 +27,7 @@ const (
 	INTERACTIVE_DIALOG_TRIGGER_TIMEOUT_MILLISECONDS = 3000
 )
 
-var PostActionRetainPropKeys = []string{"override_username", "override_icon_url"}
+var PostActionRetainPropKeys = []string{"from_webhook", "override_username", "override_icon_url"}
 
 type DoPostActionRequest struct {
 	SelectedOption string `json:"selected_option,omitempty"`
@@ -44,11 +45,26 @@ type PostAction struct {
 	// The text on the button, or in the select placeholder.
 	Name string `json:"name,omitempty"`
 
+	// If the action is disabled.
+	Disabled bool `json:"disabled,omitempty"`
+
+	// Style defines a text and border style.
+	// Supported values are "default", "primary", "success", "good", "warning", "danger"
+	// and any hex color.
+	Style string `json:"style,omitempty"`
+
 	// DataSource indicates the data source for the select action. If left
 	// empty, the select is populated from Options. Other supported values
 	// are "users" and "channels".
-	DataSource string               `json:"data_source,omitempty"`
-	Options    []*PostActionOptions `json:"options,omitempty"`
+	DataSource string `json:"data_source,omitempty"`
+
+	// Options contains the values listed in a select dropdown on the post.
+	Options []*PostActionOptions `json:"options,omitempty"`
+
+	// DefaultOption contains the option, if any, that will appear as the
+	// default selection in a select box. It has no effect when used with
+	// other types of actions.
+	DefaultOption string `json:"default_option,omitempty"`
 
 	// Defines the interaction with the backend upon a user action.
 	// Integration contains Context, which is private plugin data;
@@ -56,6 +72,76 @@ type PostAction struct {
 	// client, or are encrypted in a Cookie.
 	Integration *PostActionIntegration `json:"integration,omitempty"`
 	Cookie      string                 `json:"cookie,omitempty" db:"-"`
+}
+
+func (p *PostAction) Equals(input *PostAction) bool {
+	if p.Id != input.Id {
+		return false
+	}
+
+	if p.Type != input.Type {
+		return false
+	}
+
+	if p.Name != input.Name {
+		return false
+	}
+
+	if p.DataSource != input.DataSource {
+		return false
+	}
+
+	if p.DefaultOption != input.DefaultOption {
+		return false
+	}
+
+	if p.Cookie != input.Cookie {
+		return false
+	}
+
+	// Compare PostActionOptions
+	if len(p.Options) != len(input.Options) {
+		return false
+	}
+
+	for k := range p.Options {
+		if p.Options[k].Text != input.Options[k].Text {
+			return false
+		}
+
+		if p.Options[k].Value != input.Options[k].Value {
+			return false
+		}
+	}
+
+	// Compare PostActionIntegration
+	if p.Integration.URL != input.Integration.URL {
+		return false
+	}
+
+	if len(p.Integration.Context) != len(input.Integration.Context) {
+		return false
+	}
+
+	for key, value := range p.Integration.Context {
+		inputValue, ok := input.Integration.Context[key]
+		if !ok {
+			return false
+		}
+
+		switch inputValue.(type) {
+		case string, bool, int, float64:
+			if value != inputValue {
+				return false
+			}
+		default:
+			if !reflect.DeepEqual(value, inputValue) {
+				return false
+			}
+		}
+	}
+
+	return true
 }
 
 // PostActionCookie is set by the server, serialized and encrypted into
@@ -85,19 +171,23 @@ type PostActionIntegration struct {
 }
 
 type PostActionIntegrationRequest struct {
-	UserId     string                 `json:"user_id"`
-	ChannelId  string                 `json:"channel_id"`
-	TeamId     string                 `json:"team_id"`
-	PostId     string                 `json:"post_id"`
-	TriggerId  string                 `json:"trigger_id"`
-	Type       string                 `json:"type"`
-	DataSource string                 `json:"data_source"`
-	Context    map[string]interface{} `json:"context,omitempty"`
+	UserId      string                 `json:"user_id"`
+	UserName    string                 `json:"user_name"`
+	ChannelId   string                 `json:"channel_id"`
+	ChannelName string                 `json:"channel_name"`
+	TeamId      string                 `json:"team_id"`
+	TeamName    string                 `json:"team_domain"`
+	PostId      string                 `json:"post_id"`
+	TriggerId   string                 `json:"trigger_id"`
+	Type        string                 `json:"type"`
+	DataSource  string                 `json:"data_source"`
+	Context     map[string]interface{} `json:"context,omitempty"`
 }
 
 type PostActionIntegrationResponse struct {
-	Update        *Post  `json:"update"`
-	EphemeralText string `json:"ephemeral_text"`
+	Update           *Post  `json:"update"`
+	EphemeralText    string `json:"ephemeral_text"`
+	SkipSlackParsing bool   `json:"skip_slack_parsing"` // Set to `true` to skip the Slack-compatibility handling of Text.
 }
 
 type PostActionAPIResponse struct {
@@ -106,13 +196,14 @@ type PostActionAPIResponse struct {
 }
 
 type Dialog struct {
-	CallbackId     string          `json:"callback_id"`
-	Title          string          `json:"title"`
-	IconURL        string          `json:"icon_url"`
-	Elements       []DialogElement `json:"elements"`
-	SubmitLabel    string          `json:"submit_label"`
-	NotifyOnCancel bool            `json:"notify_on_cancel"`
-	State          string          `json:"state"`
+	CallbackId       string          `json:"callback_id"`
+	Title            string          `json:"title"`
+	IntroductionText string          `json:"introduction_text"`
+	IconURL          string          `json:"icon_url"`
+	Elements         []DialogElement `json:"elements"`
+	SubmitLabel      string          `json:"submit_label"`
+	NotifyOnCancel   bool            `json:"notify_on_cancel"`
+	State            string          `json:"state"`
 }
 
 type DialogElement struct {
@@ -149,6 +240,7 @@ type SubmitDialogRequest struct {
 }
 
 type SubmitDialogResponse struct {
+	Error  string            `json:"error,omitempty"`
 	Errors map[string]string `json:"errors,omitempty"`
 }
 
@@ -210,7 +302,7 @@ func DecodeAndVerifyTriggerId(triggerId string, s *ecdsa.PrivateKey) (string, st
 		R, S *big.Int
 	}
 
-	if _, err := asn1.Unmarshal([]byte(signature), &esig); err != nil {
+	if _, err := asn1.Unmarshal(signature, &esig); err != nil {
 		return "", "", NewAppError("DecodeAndVerifyTriggerId", "interactive_message.decode_trigger_id.signature_decode_failed", nil, err.Error(), http.StatusBadRequest)
 	}
 
@@ -289,8 +381,8 @@ func (r *SubmitDialogResponse) ToJson() []byte {
 
 func (o *Post) StripActionIntegrations() {
 	attachments := o.Attachments()
-	if o.Props["attachments"] != nil {
-		o.Props["attachments"] = attachments
+	if o.GetProp("attachments") != nil {
+		o.AddProp("attachments", attachments)
 	}
 	for _, attachment := range attachments {
 		for _, action := range attachment.Actions {
@@ -311,10 +403,10 @@ func (o *Post) GetAction(id string) *PostAction {
 }
 
 func (o *Post) GenerateActionIds() {
-	if o.Props["attachments"] != nil {
-		o.Props["attachments"] = o.Attachments()
+	if o.GetProp("attachments") != nil {
+		o.AddProp("attachments", o.Attachments())
 	}
-	if attachments, ok := o.Props["attachments"].([]*SlackAttachment); ok {
+	if attachments, ok := o.GetProp("attachments").([]*SlackAttachment); ok {
 		for _, attachment := range attachments {
 			for _, action := range attachment.Actions {
 				if action.Id == "" {
@@ -332,7 +424,7 @@ func AddPostActionCookies(o *Post, secret []byte) *Post {
 	retainProps := map[string]interface{}{}
 	removeProps := []string{}
 	for _, key := range PostActionRetainPropKeys {
-		value, ok := p.Props[key]
+		value, ok := p.GetProps()[key]
 		if ok {
 			retainProps[key] = value
 		} else {

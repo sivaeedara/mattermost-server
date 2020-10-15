@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/mattermost/mattermost-server/mlog"
+	"github.com/mattermost/mattermost-server/v5/mlog"
 
 	"github.com/go-redis/redis"
-	"github.com/mattermost/mattermost-server/app"
-	"github.com/mattermost/mattermost-server/einterfaces"
-	"github.com/mattermost/mattermost-server/model"
+	"github.com/mattermost/mattermost-server/v5/app"
+	"github.com/mattermost/mattermost-server/v5/einterfaces"
+	"github.com/mattermost/mattermost-server/v5/model"
 )
 
 var logClusterUnsupport = []string{`we don't support log live monitoring for redis cluster. Please use external log services like logentries or ELK instead`}

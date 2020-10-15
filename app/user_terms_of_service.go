@@ -1,16 +1,29 @@
-// Copyright (c) 2016-present Mattermost, Inc. All Rights Reserved.
-// See License.txt for license information.
+// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// See LICENSE.txt for license information.
 
 package app
 
-import "github.com/mattermost/mattermost-server/model"
+import (
+	"errors"
+	"net/http"
+
+	"github.com/mattermost/mattermost-server/v5/model"
+	"github.com/mattermost/mattermost-server/v5/store"
+)
 
 func (a *App) GetUserTermsOfService(userId string) (*model.UserTermsOfService, *model.AppError) {
-	if result := <-a.Srv.Store.UserTermsOfService().GetByUser(userId); result.Err != nil {
-		return nil, result.Err
-	} else {
-		return result.Data.(*model.UserTermsOfService), nil
+	u, err := a.Srv().Store.UserTermsOfService().GetByUser(userId)
+	if err != nil {
+		var nfErr *store.ErrNotFound
+		switch {
+		case errors.As(err, &nfErr):
+			return nil, model.NewAppError("GetUserTermsOfService", "app.user_terms_of_service.get_by_user.no_rows.app_error", nil, nfErr.Error(), http.StatusNotFound)
+		default:
+			return nil, model.NewAppError("GetUserTermsOfService", "app.user_terms_of_service.get_by_user.app_error", nil, err.Error(), http.StatusInternalServerError)
+		}
 	}
+
+	return u, nil
 }
 
 func (a *App) SaveUserTermsOfService(userId, termsOfServiceId string, accepted bool) *model.AppError {
@@ -20,12 +33,18 @@ func (a *App) SaveUserTermsOfService(userId, termsOfServiceId string, accepted b
 			TermsOfServiceId: termsOfServiceId,
 		}
 
-		if result := <-a.Srv.Store.UserTermsOfService().Save(userTermsOfService); result.Err != nil {
-			return result.Err
+		if _, err := a.Srv().Store.UserTermsOfService().Save(userTermsOfService); err != nil {
+			var appErr *model.AppError
+			switch {
+			case errors.As(err, &appErr):
+				return appErr
+			default:
+				return model.NewAppError("SaveUserTermsOfService", "app.user_terms_of_service.save.app_error", nil, err.Error(), http.StatusInternalServerError)
+			}
 		}
 	} else {
-		if result := <-a.Srv.Store.UserTermsOfService().Delete(userId, termsOfServiceId); result.Err != nil {
-			return result.Err
+		if err := a.Srv().Store.UserTermsOfService().Delete(userId, termsOfServiceId); err != nil {
+			return model.NewAppError("SaveUserTermsOfService", "app.user_terms_of_service.delete.app_error", nil, err.Error(), http.StatusInternalServerError)
 		}
 	}
 

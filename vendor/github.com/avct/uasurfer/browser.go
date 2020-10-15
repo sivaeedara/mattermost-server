@@ -23,7 +23,7 @@ func (u *UserAgent) evalBrowserName(ua string) bool {
 	// Blackberry goes first because it reads as MSIE & Safari
 	if strings.Contains(ua, "blackberry") || strings.Contains(ua, "playbook") || strings.Contains(ua, "bb10") || strings.Contains(ua, "rim ") {
 		u.Browser.Name = BrowserBlackberry
-		return u.isBot()
+		return u.maybeBot()
 	}
 
 	if strings.Contains(ua, "applewebkit") {
@@ -31,13 +31,16 @@ func (u *UserAgent) evalBrowserName(ua string) bool {
 		case strings.Contains(ua, "googlebot"):
 			u.Browser.Name = BrowserGoogleBot
 
+		case strings.Contains(ua, "qq/") || strings.Contains(ua, "qqbrowser/"):
+			u.Browser.Name = BrowserQQ
+
 		case strings.Contains(ua, "opr/") || strings.Contains(ua, "opios/"):
 			u.Browser.Name = BrowserOpera
 
 		case strings.Contains(ua, "silk/"):
 			u.Browser.Name = BrowserSilk
 
-		case strings.Contains(ua, "edge/") || strings.Contains(ua, "iemobile/") || strings.Contains(ua, "msie "):
+		case strings.Contains(ua, "edg/") || strings.Contains(ua, "edgios/") || strings.Contains(ua, "edga/")|| strings.Contains(ua, "edge/") || strings.Contains(ua, "iemobile/") || strings.Contains(ua, "msie "):
 			u.Browser.Name = BrowserIE
 
 		case strings.Contains(ua, "ucbrowser/") || strings.Contains(ua, "ucweb/"):
@@ -89,11 +92,14 @@ func (u *UserAgent) evalBrowserName(ua string) bool {
 			goto notwebkit
 
 		}
-		return u.isBot()
+		return u.maybeBot()
 	}
 
 notwebkit:
 	switch {
+	case strings.Contains(ua, "qq/") || strings.Contains(ua, "qqbrowser/"):
+		u.Browser.Name = BrowserQQ
+
 	case strings.Contains(ua, "msie") || strings.Contains(ua, "trident"):
 		u.Browser.Name = BrowserIE
 
@@ -153,7 +159,7 @@ notwebkit:
 
 	}
 
-	return u.isBot()
+	return u.maybeBot()
 }
 
 // Retrieve browser version
@@ -173,8 +179,13 @@ func (u *UserAgent) evalBrowserVersion(ua string) {
 		_ = u.Browser.Version.findVersionNumber(ua, "chrome/") || u.Browser.Version.findVersionNumber(ua, "crios/") || u.Browser.Version.findVersionNumber(ua, "crmo/")
 	case BrowserYandex:
 		_ = u.Browser.Version.findVersionNumber(ua, "yabrowser/")
+	case BrowserQQ:
+		if u.Browser.Version.findVersionNumber(ua, "qq/") {
+			return
+		}
+		_ = u.Browser.Version.findVersionNumber(ua, "qqbrowser/")
 	case BrowserIE:
-		if u.Browser.Version.findVersionNumber(ua, "msie ") || u.Browser.Version.findVersionNumber(ua, "edge/") {
+		if u.Browser.Version.findVersionNumber(ua, "msie ") || u.Browser.Version.findVersionNumber(ua, "edge/") || u.Browser.Version.findVersionNumber(ua, "edgios/") || u.Browser.Version.findVersionNumber(ua, "edga/") || u.Browser.Version.findVersionNumber(ua, "edg/") {
 			return
 		}
 

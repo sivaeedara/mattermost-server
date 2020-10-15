@@ -1,28 +1,39 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
-// See License.txt for license information.
+// See LICENSE.txt for license information.
 
 package app
 
 import (
+	"bytes"
 	"image"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/dyatlov/go-opengraph/opengraph"
-	"github.com/mattermost/mattermost-server/mlog"
-	"github.com/mattermost/mattermost-server/model"
-	"github.com/mattermost/mattermost-server/utils"
-	"github.com/mattermost/mattermost-server/utils/markdown"
+	"github.com/mattermost/mattermost-server/v5/mlog"
+	"github.com/mattermost/mattermost-server/v5/model"
+	"github.com/mattermost/mattermost-server/v5/services/cache"
+	"github.com/mattermost/mattermost-server/v5/utils/imgutils"
+	"github.com/mattermost/mattermost-server/v5/utils/markdown"
 )
 
+type linkMetadataCache struct {
+	OpenGraph *opengraph.OpenGraph
+	PostImage *model.PostImage
+}
+
 const LINK_CACHE_SIZE = 10000
-const LINK_CACHE_DURATION = 3600
+const LINK_CACHE_DURATION = 1 * time.Hour
 const MaxMetadataImageSize = MaxOpenGraphResponseSize
 
-var linkCache = utils.NewLru(LINK_CACHE_SIZE)
+var linkCache = cache.NewLRU(&cache.LRUOptions{
+	Size: LINK_CACHE_SIZE,
+})
 
 func (a *App) InitPostMetadata() {
 	// Dump any cached links if the proxy settings have changed so image URLs can be updated
@@ -38,12 +49,14 @@ func (a *App) InitPostMetadata() {
 
 func (a *App) PreparePostListForClient(originalList *model.PostList) *model.PostList {
 	list := &model.PostList{
-		Posts: make(map[string]*model.Post, len(originalList.Posts)),
-		Order: originalList.Order, // Note that this uses the original Order array, so it isn't a deep copy
+		Posts:      make(map[string]*model.Post, len(originalList.Posts)),
+		Order:      originalList.Order,
+		NextPostId: originalList.NextPostId,
+		PrevPostId: originalList.PrevPostId,
 	}
 
 	for id, originalPost := range originalList.Posts {
-		post := a.PreparePostForClient(originalPost, false)
+		post := a.PreparePostForClient(originalPost, false, false)
 
 		list.Posts[id] = post
 	}
@@ -51,29 +64,57 @@ func (a *App) PreparePostListForClient(originalList *model.PostList) *model.Post
 	return list
 }
 
-func (a *App) PreparePostForClient(originalPost *model.Post, isNewPost bool) *model.Post {
+// OverrideIconURLIfEmoji changes the post icon override URL prop, if it has an emoji icon,
+// so that it points to the URL (relative) of the emoji - static if emoji is default, /api if custom.
+func (a *App) OverrideIconURLIfEmoji(post *model.Post) {
+	prop, ok := post.GetProps()[model.POST_PROPS_OVERRIDE_ICON_EMOJI]
+	if !ok || prop == nil {
+		return
+	}
+
+	emojiName, ok := prop.(string)
+	if !ok {
+		return
+	}
+
+	if !*a.Config().ServiceSettings.EnablePostIconOverride || emojiName == "" {
+		return
+	}
+
+	if emojiUrl, err := a.GetEmojiStaticUrl(emojiName); err == nil {
+		post.AddProp(model.POST_PROPS_OVERRIDE_ICON_URL, emojiUrl)
+	} else {
+		mlog.Warn("Failed to retrieve URL for overridden profile icon (emoji)", mlog.String("emojiName", emojiName), mlog.Err(err))
+	}
+}
+
+func (a *App) PreparePostForClient(originalPost *model.Post, isNewPost bool, isEditPost bool) *model.Post {
 	post := originalPost.Clone()
 
 	// Proxy image links before constructing metadata so that requests go through the proxy
 	post = a.PostWithProxyAddedToImageURLs(post)
 
-	if *a.Config().ExperimentalSettings.DisablePostMetadata {
-		return post
-	}
+	a.OverrideIconURLIfEmoji(post)
 
 	post.Metadata = &model.PostMetadata{}
 
+	if post.DeleteAt > 0 {
+		// For deleted posts we don't fill out metadata nor do we return the post content
+		post.Message = ""
+		return post
+	}
+
 	// Emojis and reaction counts
 	if emojis, reactions, err := a.getEmojisAndReactionsForPost(post); err != nil {
-		mlog.Warn("Failed to get emojis and reactions for a post", mlog.String("post_id", post.Id), mlog.Any("err", err))
+		mlog.Warn("Failed to get emojis and reactions for a post", mlog.String("post_id", post.Id), mlog.Err(err))
 	} else {
 		post.Metadata.Emojis = emojis
 		post.Metadata.Reactions = reactions
 	}
 
 	// Files
-	if fileInfos, err := a.getFileMetadataForPost(post); err != nil {
-		mlog.Warn("Failed to get files for a post", mlog.String("post_id", post.Id), mlog.Any("err", err))
+	if fileInfos, err := a.getFileMetadataForPost(post, isNewPost || isEditPost); err != nil {
+		mlog.Warn("Failed to get files for a post", mlog.String("post_id", post.Id), mlog.Err(err))
 	} else {
 		post.Metadata.Files = fileInfos
 	}
@@ -82,7 +123,7 @@ func (a *App) PreparePostForClient(originalPost *model.Post, isNewPost bool) *mo
 	firstLink, images := getFirstLinkAndImages(post.Message)
 
 	if embed, err := a.getEmbedForPost(post, firstLink, isNewPost); err != nil {
-		mlog.Debug("Failed to get embedded content for a post", mlog.String("post_id", post.Id), mlog.Any("err", err))
+		mlog.Debug("Failed to get embedded content for a post", mlog.String("post_id", post.Id), mlog.Err(err))
 	} else if embed == nil {
 		post.Metadata.Embeds = []*model.PostEmbed{}
 	} else {
@@ -94,12 +135,12 @@ func (a *App) PreparePostForClient(originalPost *model.Post, isNewPost bool) *mo
 	return post
 }
 
-func (a *App) getFileMetadataForPost(post *model.Post) ([]*model.FileInfo, *model.AppError) {
+func (a *App) getFileMetadataForPost(post *model.Post, fromMaster bool) ([]*model.FileInfo, *model.AppError) {
 	if len(post.FileIds) == 0 {
 		return nil, nil
 	}
 
-	return a.GetFileInfosForPost(post.Id)
+	return a.GetFileInfosForPost(post.Id, fromMaster)
 }
 
 func (a *App) getEmojisAndReactionsForPost(post *model.Post) ([]*model.Emoji, []*model.Reaction, *model.AppError) {
@@ -121,13 +162,13 @@ func (a *App) getEmojisAndReactionsForPost(post *model.Post) ([]*model.Emoji, []
 }
 
 func (a *App) getEmbedForPost(post *model.Post, firstLink string, isNewPost bool) (*model.PostEmbed, error) {
-	if _, ok := post.Props["attachments"]; ok {
+	if _, ok := post.GetProps()["attachments"]; ok {
 		return &model.PostEmbed{
 			Type: model.POST_EMBED_MESSAGE_ATTACHMENT,
 		}, nil
 	}
 
-	if firstLink == "" {
+	if firstLink == "" || !*a.Config().ServiceSettings.EnableLinkPreviews {
 		return nil, nil
 	}
 
@@ -145,14 +186,17 @@ func (a *App) getEmbedForPost(post *model.Post, firstLink string, isNewPost bool
 	}
 
 	if image != nil {
-		// Note that we're not passing the image info here since they'll be part of the PostMetadata.Images field
+		// Note that we're not passing the image info here since it'll be part of the PostMetadata.Images field
 		return &model.PostEmbed{
 			Type: model.POST_EMBED_IMAGE,
 			URL:  firstLink,
 		}, nil
 	}
 
-	return nil, nil
+	return &model.PostEmbed{
+		Type: model.POST_EMBED_LINK,
+		URL:  firstLink,
+	}, nil
 }
 
 func (a *App) getImagesForPost(post *model.Post, imageURLs []string, isNewPost bool) map[string]*model.PostImage {
@@ -180,16 +224,7 @@ func (a *App) getImagesForPost(post *model.Post, imageURLs []string, isNewPost b
 					continue
 				}
 
-				if image.Width != 0 || image.Height != 0 {
-					// The site has already told us the image dimensions
-					images[imageURL] = &model.PostImage{
-						Width:  int(image.Width),
-						Height: int(image.Height),
-					}
-				} else {
-					// The site did not specify its image dimensions
-					imageURLs = append(imageURLs, imageURL)
-				}
+				imageURLs = append(imageURLs, imageURL)
 			}
 		}
 	}
@@ -202,7 +237,7 @@ func (a *App) getImagesForPost(post *model.Post, imageURLs []string, isNewPost b
 	for _, imageURL := range imageURLs {
 		if _, image, err := a.getLinkMetadata(imageURL, post.CreateAt, isNewPost); err != nil {
 			mlog.Debug("Failed to get dimensions of an image in a post",
-				mlog.String("post_id", post.Id), mlog.String("image_url", imageURL), mlog.Any("err", err))
+				mlog.String("post_id", post.Id), mlog.String("image_url", imageURL), mlog.Err(err))
 		} else if image != nil {
 			images[imageURL] = image
 		}
@@ -278,6 +313,10 @@ func getFirstLinkAndImages(str string) (string, []string) {
 	markdown.Inspect(str, func(blockOrInline interface{}) bool {
 		switch v := blockOrInline.(type) {
 		case *markdown.Autolink:
+			if firstLink == "" {
+				firstLink = v.Destination()
+			}
+		case *markdown.InlineLink:
 			if firstLink == "" {
 				firstLink = v.Destination()
 			}
@@ -362,11 +401,12 @@ func (a *App) getLinkMetadata(requestURL string, timestamp int64, isNewPost bool
 
 	if (request.URL.Scheme+"://"+request.URL.Host) == a.GetSiteURL() && request.URL.Path == "/api/v4/image" {
 		// /api/v4/image requires authentication, so bypass the API by hitting the proxy directly
-		body, contentType, err = a.ImageProxy.GetImageDirect(a.ImageProxy.GetUnproxiedImageURL(request.URL.String()))
+		body, contentType, err = a.ImageProxy().GetImageDirect(a.ImageProxy().GetUnproxiedImageURL(request.URL.String()))
 	} else {
-		request.Header.Add("Accept", "image/*, text/html")
+		request.Header.Add("Accept", "image/*")
+		request.Header.Add("Accept", "text/html;q=0.8")
 
-		client := a.HTTPService.MakeClient(false)
+		client := a.HTTPService().MakeClient(false)
 		client.Timeout = time.Duration(*a.Config().ExperimentalSettings.LinkMetadataTimeoutMilliseconds) * time.Millisecond
 
 		var res *http.Response
@@ -379,13 +419,17 @@ func (a *App) getLinkMetadata(requestURL string, timestamp int64, isNewPost bool
 	}
 
 	if body != nil {
-		defer body.Close()
+		defer func() {
+			io.Copy(ioutil.Discard, body)
+			body.Close()
+		}()
 	}
 
 	if err == nil {
 		// Parse the data
 		og, image, err = a.parseLinkMetadata(requestURL, body, contentType)
 	}
+	og = model.TruncateOpenGraph(og) // remove unwanted length of texts
 
 	// Write back to cache and database, even if there was an error and the results are nil
 	cacheLinkMetadata(requestURL, timestamp, og, image)
@@ -411,28 +455,22 @@ func resolveMetadataURL(requestURL string, siteURL string) string {
 }
 
 func getLinkMetadataFromCache(requestURL string, timestamp int64) (*opengraph.OpenGraph, *model.PostImage, bool) {
-	cached, ok := linkCache.Get(model.GenerateLinkMetadataHash(requestURL, timestamp))
-	if !ok {
+	var cached linkMetadataCache
+	err := linkCache.Get(strconv.FormatInt(model.GenerateLinkMetadataHash(requestURL, timestamp), 16), &cached)
+	if err != nil {
 		return nil, nil, false
 	}
 
-	switch v := cached.(type) {
-	case *opengraph.OpenGraph:
-		return v, nil, true
-	case *model.PostImage:
-		return nil, v, true
-	default:
-		return nil, nil, true
-	}
+	return cached.OpenGraph, cached.PostImage, true
 }
 
 func (a *App) getLinkMetadataFromDatabase(requestURL string, timestamp int64) (*opengraph.OpenGraph, *model.PostImage, bool) {
-	result := <-a.Srv.Store.LinkMetadata().Get(requestURL, timestamp)
-	if result.Err != nil {
+	linkMetadata, err := a.Srv().Store.LinkMetadata().Get(requestURL, timestamp)
+	if err != nil {
 		return nil, nil, false
 	}
 
-	data := result.Data.(*model.LinkMetadata).Data
+	data := linkMetadata.Data
 
 	switch v := data.(type) {
 	case *opengraph.OpenGraph:
@@ -460,29 +498,33 @@ func (a *App) saveLinkMetadataToDatabase(requestURL string, timestamp int64, og 
 		metadata.Type = model.LINK_METADATA_TYPE_NONE
 	}
 
-	result := <-a.Srv.Store.LinkMetadata().Save(metadata)
-	if result.Err != nil {
-		mlog.Warn("Failed to write link metadata", mlog.String("request_url", requestURL), mlog.Err(result.Err))
+	_, err := a.Srv().Store.LinkMetadata().Save(metadata)
+	if err != nil {
+		mlog.Warn("Failed to write link metadata", mlog.String("request_url", requestURL), mlog.Err(err))
 	}
 }
 
 func cacheLinkMetadata(requestURL string, timestamp int64, og *opengraph.OpenGraph, image *model.PostImage) {
-	var val interface{}
-	if og != nil {
-		val = og
-	} else if image != nil {
-		val = image
+	metadata := linkMetadataCache{
+		OpenGraph: og,
+		PostImage: image,
 	}
 
-	linkCache.AddWithExpiresInSecs(model.GenerateLinkMetadataHash(requestURL, timestamp), val, LINK_CACHE_DURATION)
+	linkCache.SetWithExpiry(strconv.FormatInt(model.GenerateLinkMetadataHash(requestURL, timestamp), 16), metadata, LINK_CACHE_DURATION)
 }
 
 func (a *App) parseLinkMetadata(requestURL string, body io.Reader, contentType string) (*opengraph.OpenGraph, *model.PostImage, error) {
-	if strings.HasPrefix(contentType, "image") {
+	if contentType == "image/svg+xml" {
+		image := &model.PostImage{
+			Format: "svg",
+		}
+
+		return nil, image, nil
+	} else if strings.HasPrefix(contentType, "image") {
 		image, err := parseImages(io.LimitReader(body, MaxMetadataImageSize))
 		return nil, image, err
 	} else if strings.HasPrefix(contentType, "text/html") {
-		og := a.ParseOpenGraphMetadata(requestURL, body, contentType)
+		og := a.parseOpenGraphMetadata(requestURL, body, contentType)
 
 		// The OpenGraph library and Go HTML library don't error for malformed input, so check that at least
 		// one of these required fields exists before returning the OpenGraph data
@@ -498,7 +540,12 @@ func (a *App) parseLinkMetadata(requestURL string, body io.Reader, contentType s
 }
 
 func parseImages(body io.Reader) (*model.PostImage, error) {
-	config, _, err := image.DecodeConfig(body)
+	// Store any data that is read for the config for any further processing
+	buf := &bytes.Buffer{}
+	t := io.TeeReader(body, buf)
+
+	// Read the image config to get the format and dimensions
+	config, format, err := image.DecodeConfig(t)
 	if err != nil {
 		return nil, err
 	}
@@ -506,6 +553,22 @@ func parseImages(body io.Reader) (*model.PostImage, error) {
 	image := &model.PostImage{
 		Width:  config.Width,
 		Height: config.Height,
+		Format: format,
+	}
+
+	if format == "gif" {
+		// Decoding the config may have read some of the image data, so re-read the data that has already been read first
+		frameCount, err := imgutils.CountFrames(io.MultiReader(buf, body))
+		if err != nil {
+			return nil, err
+		}
+
+		image.FrameCount = frameCount
+	}
+
+	// Make image information nil when the format is tiff
+	if format == "tiff" {
+		image = nil
 	}
 
 	return image, nil

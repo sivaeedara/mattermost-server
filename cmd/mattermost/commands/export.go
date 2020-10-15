@@ -1,17 +1,17 @@
-// Copyright (c) 2016-present Mattermost, Inc. All Rights Reserved.
-// See License.txt for license information.
+// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// See LICENSE.txt for license information.
 
 package commands
 
 import (
-	"errors"
-	"os"
-
 	"context"
-
+	"fmt"
+	"os"
 	"time"
 
-	"github.com/mattermost/mattermost-server/model"
+	"github.com/mattermost/mattermost-server/v5/audit"
+	"github.com/mattermost/mattermost-server/v5/model"
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 )
 
@@ -45,11 +45,19 @@ var ActianceExportCmd = &cobra.Command{
 	RunE:    buildExportCmdF("actiance"),
 }
 
+var GlobalRelayZipExportCmd = &cobra.Command{
+	Use:     "global-relay-zip",
+	Short:   "Export data from Mattermost into a zip file containing emails to send to Global Relay for debug and testing purposes only.",
+	Long:    "Export data from Mattermost into a zip file containing emails to send to Global Relay for debug and testing purposes only. This does not archive any information in Global Relay.",
+	Example: "export global-relay-zip --exportFrom=12345",
+	RunE:    buildExportCmdF("globalrelay-zip"),
+}
+
 var BulkExportCmd = &cobra.Command{
 	Use:     "bulk [file]",
 	Short:   "Export bulk data.",
 	Long:    "Export data to a file compatible with the Mattermost Bulk Import format.",
-	Example: "  export bulk bulk_data.json",
+	Example: "export bulk bulk_data.json",
 	RunE:    bulkExportCmdF,
 	Args:    cobra.ExactArgs(1),
 }
@@ -62,12 +70,14 @@ func init() {
 	CsvExportCmd.Flags().Int64("exportFrom", -1, "The timestamp of the earliest post to export, expressed in seconds since the unix epoch.")
 
 	ActianceExportCmd.Flags().Int64("exportFrom", -1, "The timestamp of the earliest post to export, expressed in seconds since the unix epoch.")
+	GlobalRelayZipExportCmd.Flags().Int64("exportFrom", -1, "The timestamp of the earliest post to export, expressed in seconds since the unix epoch.")
 
-	BulkExportCmd.Flags().Bool("all-teams", false, "Export all teams from the server.")
+	BulkExportCmd.Flags().Bool("all-teams", true, "Export all teams from the server.")
 
 	ExportCmd.AddCommand(ScheduleExportCmd)
 	ExportCmd.AddCommand(CsvExportCmd)
 	ExportCmd.AddCommand(ActianceExportCmd)
+	ExportCmd.AddCommand(GlobalRelayZipExportCmd)
 	ExportCmd.AddCommand(BulkExportCmd)
 
 	RootCmd.AddCommand(ExportCmd)
@@ -78,7 +88,7 @@ func scheduleExportCmdF(command *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	defer a.Shutdown()
+	defer a.Srv().Shutdown()
 
 	if !*a.Config().MessageExportSettings.EnableExport {
 		return errors.New("ERROR: The message export feature is not enabled")
@@ -109,7 +119,7 @@ func scheduleExportCmdF(command *cobra.Command, args []string) error {
 		return errors.New("timeoutSeconds must be a positive integer")
 	}
 
-	if messageExportI := a.MessageExport; messageExportI != nil {
+	if messageExportI := a.MessageExport(); messageExportI != nil {
 		ctx := context.Background()
 		if timeoutSeconds > 0 {
 			var cancel context.CancelFunc
@@ -122,19 +132,24 @@ func scheduleExportCmdF(command *cobra.Command, args []string) error {
 			CommandPrintErrorln("ERROR: Message export job failed. Please check the server logs")
 		} else {
 			CommandPrettyPrintln("SUCCESS: Message export job complete")
+
+			auditRec := a.MakeAuditRecord("scheduleExport", audit.Success)
+			auditRec.AddMeta("format", format)
+			auditRec.AddMeta("start", startTime)
+			a.LogAuditRec(auditRec, nil)
 		}
 	}
-
 	return nil
 }
 
 func buildExportCmdF(format string) func(command *cobra.Command, args []string) error {
 	return func(command *cobra.Command, args []string) error {
 		a, err := InitDBCommandContextCobra(command)
+		license := a.Srv().License()
 		if err != nil {
 			return err
 		}
-		defer a.Shutdown()
+		defer a.Srv().Shutdown()
 
 		startTime, err := command.Flags().GetInt64("exportFrom")
 		if err != nil {
@@ -144,15 +159,28 @@ func buildExportCmdF(format string) func(command *cobra.Command, args []string) 
 			return errors.New("exportFrom must be a positive integer")
 		}
 
-		if a.MessageExport == nil {
-			CommandPrettyPrintln("MessageExport feature not available")
+		if a.MessageExport() == nil || license == nil || !*license.Features.MessageExport {
+			return errors.New("message export feature not available")
 		}
 
-		err2 := a.MessageExport.RunExport(format, startTime)
-		if err2 != nil {
-			return err2
+		warningsCount, appErr := a.MessageExport().RunExport(format, startTime)
+		if appErr != nil {
+			return appErr
 		}
-		CommandPrettyPrintln("SUCCESS: Your data was exported.")
+		if warningsCount == 0 {
+			CommandPrettyPrintln("SUCCESS: Your data was exported.")
+		} else {
+			if format == model.COMPLIANCE_EXPORT_TYPE_GLOBALRELAY || format == model.COMPLIANCE_EXPORT_TYPE_GLOBALRELAY_ZIP {
+				CommandPrettyPrintln(fmt.Sprintf("WARNING: %d warnings encountered, see logs for details.", warningsCount))
+			} else {
+				CommandPrettyPrintln(fmt.Sprintf("WARNING: %d warnings encountered, see warning.txt for details.", warningsCount))
+			}
+		}
+
+		auditRec := a.MakeAuditRecord("buildExport", audit.Success)
+		auditRec.AddMeta("format", format)
+		auditRec.AddMeta("start", startTime)
+		a.LogAuditRec(auditRec, nil)
 
 		return nil
 	}
@@ -163,13 +191,12 @@ func bulkExportCmdF(command *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	defer a.Shutdown()
+	defer a.Srv().Shutdown()
 
 	allTeams, err := command.Flags().GetBool("all-teams")
 	if err != nil {
-		return errors.New("Apply flag error")
+		return errors.Wrap(err, "all-teams flag error")
 	}
-
 	if !allTeams {
 		return errors.New("Nothing to export. Please specify the --all-teams flag to export all teams.")
 	}
@@ -183,14 +210,24 @@ func bulkExportCmdF(command *cobra.Command, args []string) error {
 	// Path to directory of custom emoji
 	pathToEmojiDir := "data/emoji/"
 
+	customDataDir := a.Config().FileSettings.Directory
+	if customDataDir != nil && *customDataDir != "" {
+		pathToEmojiDir = *customDataDir + "emoji/"
+	}
+
 	// Name of the directory to export custom emoji
 	dirNameToExportEmoji := "exported_emoji"
 
 	// args[0] points to the filename/filepath passed with export bulk command
 	if err := a.BulkExport(fileWriter, args[0], pathToEmojiDir, dirNameToExportEmoji); err != nil {
-		CommandPrettyPrintln(err.Error())
+		CommandPrintErrorln(err.Error())
 		return err
 	}
+
+	auditRec := a.MakeAuditRecord("bulkExport", audit.Success)
+	auditRec.AddMeta("all_teams", allTeams)
+	auditRec.AddMeta("file", args[0])
+	a.LogAuditRec(auditRec, nil)
 
 	return nil
 }

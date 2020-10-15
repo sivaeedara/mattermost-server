@@ -1,22 +1,19 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
-// See License.txt for license information.
+// See LICENSE.txt for license information.
 
 package web
 
 import (
-	"fmt"
-	"mime"
 	"net/http"
 	"path"
 	"path/filepath"
 	"strings"
 
 	"github.com/NYTimes/gziphandler"
-
-	"github.com/mattermost/mattermost-server/mlog"
-	"github.com/mattermost/mattermost-server/model"
-	"github.com/mattermost/mattermost-server/utils"
-	"github.com/mattermost/mattermost-server/utils/fileutils"
+	"github.com/mattermost/mattermost-server/v5/mlog"
+	"github.com/mattermost/mattermost-server/v5/model"
+	"github.com/mattermost/mattermost-server/v5/utils"
+	"github.com/mattermost/mattermost-server/v5/utils/fileutils"
 )
 
 var robotsTxt = []byte("User-agent: *\nDisallow: /\n")
@@ -28,11 +25,9 @@ func (w *Web) InitStatic() {
 		}
 
 		staticDir, _ := fileutils.FindDir(model.CLIENT_DIR)
-		mlog.Debug(fmt.Sprintf("Using client directory at %v", staticDir))
+		mlog.Debug("Using client directory", mlog.String("clientDir", staticDir))
 
 		subpath, _ := utils.GetSubpathFromConfig(w.ConfigService.Config())
-
-		mime.AddExtensionType(".wasm", "application/wasm")
 
 		staticHandler := staticFilesHandler(http.StripPrefix(path.Join(subpath, "static"), http.FileServer(http.Dir(staticDir))))
 		pluginHandler := staticFilesHandler(http.StripPrefix(path.Join(subpath, "static", "plugins"), http.FileServer(http.Dir(*w.ConfigService.Config().PluginSettings.ClientDirectory))))
@@ -45,6 +40,7 @@ func (w *Web) InitStatic() {
 		w.MainRouter.PathPrefix("/static/plugins/").Handler(pluginHandler)
 		w.MainRouter.PathPrefix("/static/").Handler(staticHandler)
 		w.MainRouter.Handle("/robots.txt", http.HandlerFunc(robotsHandler))
+		w.MainRouter.Handle("/unsupported_browser.js", http.HandlerFunc(unsupportedBrowserScriptHandler))
 		w.MainRouter.Handle("/{anything:.*}", w.NewStaticHandler(root)).Methods("GET")
 
 		// When a subpath is defined, it's necessary to handle redirects without a
@@ -60,11 +56,7 @@ func (w *Web) InitStatic() {
 func root(c *Context, w http.ResponseWriter, r *http.Request) {
 
 	if !CheckClientCompatability(r.UserAgent()) {
-		w.Header().Set("Cache-Control", "no-store")
-		page := utils.NewHTMLTemplate(c.App.HTMLTemplates(), "unsupported_browser")
-		page.Props["Title"] = c.App.T("web.error.unsupported_browser.title")
-		page.Props["Message"] = c.App.T("web.error.unsupported_browser.message")
-		page.RenderToWriter(w)
+		renderUnsupportedBrowser(c.App, w, r)
 		return
 	}
 
@@ -81,13 +73,30 @@ func root(c *Context, w http.ResponseWriter, r *http.Request) {
 
 func staticFilesHandler(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		//wrap our ResponseWriter with our no-cache 404-handler
+		w = &notFoundNoCacheResponseWriter{ResponseWriter: w}
+
 		w.Header().Set("Cache-Control", "max-age=31556926, public")
+
 		if strings.HasSuffix(r.URL.Path, "/") {
 			http.NotFound(w, r)
 			return
 		}
+
 		handler.ServeHTTP(w, r)
 	})
+}
+
+type notFoundNoCacheResponseWriter struct {
+	http.ResponseWriter
+}
+
+func (w *notFoundNoCacheResponseWriter) WriteHeader(statusCode int) {
+	if statusCode == http.StatusNotFound {
+		// we have a 404, update our cache header first then fall through
+		w.Header().Set("Cache-Control", "no-cache, public")
+	}
+	w.ResponseWriter.WriteHeader(statusCode)
 }
 
 func robotsHandler(w http.ResponseWriter, r *http.Request) {
@@ -96,4 +105,14 @@ func robotsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Write(robotsTxt)
+}
+
+func unsupportedBrowserScriptHandler(w http.ResponseWriter, r *http.Request) {
+	if strings.HasSuffix(r.URL.Path, "/") {
+		http.NotFound(w, r)
+		return
+	}
+
+	templatesDir, _ := fileutils.FindDir("templates")
+	http.ServeFile(w, r, filepath.Join(templatesDir, "unsupported_browser.js"))
 }

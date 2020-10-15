@@ -1,22 +1,30 @@
-// Copyright (c) 2016-present Mattermost, Inc. All Rights Reserved.
-// See License.txt for license information.
+// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// See LICENSE.txt for license information.
 
 package sqlstore
 
 import (
-	"net/http"
+	"database/sql"
 
-	"github.com/mattermost/mattermost-server/model"
-	"github.com/mattermost/mattermost-server/store"
+	"github.com/mattermost/mattermost-server/v5/model"
+	"github.com/mattermost/mattermost-server/v5/store"
+
+	sq "github.com/Masterminds/squirrel"
+	"github.com/pkg/errors"
 )
 
 type SqlCommandStore struct {
 	SqlStore
+
+	commandsQuery sq.SelectBuilder
 }
 
-func NewSqlCommandStore(sqlStore SqlStore) store.CommandStore {
-	s := &SqlCommandStore{sqlStore}
+func newSqlCommandStore(sqlStore SqlStore) store.CommandStore {
+	s := &SqlCommandStore{SqlStore: sqlStore}
 
+	s.commandsQuery = s.getQueryBuilder().
+		Select("*").
+		From("Commands")
 	for _, db := range sqlStore.GetAllConns() {
 		tableo := db.AddTableWithName(model.Command{}, "Commands").SetKeys(false, "Id")
 		tableo.ColMap("Id").SetMaxSize(26)
@@ -32,142 +40,171 @@ func NewSqlCommandStore(sqlStore SqlStore) store.CommandStore {
 		tableo.ColMap("AutoCompleteHint").SetMaxSize(1024)
 		tableo.ColMap("DisplayName").SetMaxSize(64)
 		tableo.ColMap("Description").SetMaxSize(128)
+		tableo.ColMap("PluginId").SetMaxSize(190)
 	}
 
 	return s
 }
 
-func (s SqlCommandStore) CreateIndexesIfNotExists() {
+func (s SqlCommandStore) createIndexesIfNotExists() {
 	s.CreateIndexIfNotExists("idx_command_team_id", "Commands", "TeamId")
 	s.CreateIndexIfNotExists("idx_command_update_at", "Commands", "UpdateAt")
 	s.CreateIndexIfNotExists("idx_command_create_at", "Commands", "CreateAt")
 	s.CreateIndexIfNotExists("idx_command_delete_at", "Commands", "DeleteAt")
 }
 
-func (s SqlCommandStore) Save(command *model.Command) store.StoreChannel {
-	return store.Do(func(result *store.StoreResult) {
-		if len(command.Id) > 0 {
-			result.Err = model.NewAppError("SqlCommandStore.Save", "store.sql_command.save.saving_overwrite.app_error", nil, "id="+command.Id, http.StatusBadRequest)
-			return
-		}
+func (s SqlCommandStore) Save(command *model.Command) (*model.Command, error) {
+	if len(command.Id) > 0 {
+		return nil, store.NewErrInvalidInput("Command", "CommandId", command.Id)
+	}
 
-		command.PreSave()
-		if result.Err = command.IsValid(); result.Err != nil {
-			return
-		}
+	command.PreSave()
+	if err := command.IsValid(); err != nil {
+		return nil, err
+	}
 
-		if err := s.GetMaster().Insert(command); err != nil {
-			result.Err = model.NewAppError("SqlCommandStore.Save", "store.sql_command.save.saving.app_error", nil, "id="+command.Id+", "+err.Error(), http.StatusInternalServerError)
-		} else {
-			result.Data = command
-		}
-	})
+	if err := s.GetMaster().Insert(command); err != nil {
+		return nil, errors.Wrapf(err, "insert: command_id=%s", command.Id)
+	}
+
+	return command, nil
 }
 
-func (s SqlCommandStore) Get(id string) store.StoreChannel {
-	return store.Do(func(result *store.StoreResult) {
-		var command model.Command
+func (s SqlCommandStore) Get(id string) (*model.Command, error) {
+	var command model.Command
 
-		if err := s.GetReplica().SelectOne(&command, "SELECT * FROM Commands WHERE Id = :Id AND DeleteAt = 0", map[string]interface{}{"Id": id}); err != nil {
-			result.Err = model.NewAppError("SqlCommandStore.Get", "store.sql_command.save.get.app_error", nil, "id="+id+", err="+err.Error(), http.StatusInternalServerError)
-		}
+	query, args, err := s.commandsQuery.
+		Where(sq.Eq{"Id": id, "DeleteAt": 0}).ToSql()
+	if err != nil {
+		return nil, errors.Wrapf(err, "commands_tosql")
+	}
+	if err = s.GetReplica().SelectOne(&command, query, args...); err == sql.ErrNoRows {
+		return nil, store.NewErrNotFound("Command", id)
+	} else if err != nil {
+		return nil, errors.Wrapf(err, "selectone: command_id=%s", id)
+	}
 
-		result.Data = &command
-	})
+	return &command, nil
 }
 
-func (s SqlCommandStore) GetByTeam(teamId string) store.StoreChannel {
-	return store.Do(func(result *store.StoreResult) {
-		var commands []*model.Command
+func (s SqlCommandStore) GetByTeam(teamId string) ([]*model.Command, error) {
+	var commands []*model.Command
 
-		if _, err := s.GetReplica().Select(&commands, "SELECT * FROM Commands WHERE TeamId = :TeamId AND DeleteAt = 0", map[string]interface{}{"TeamId": teamId}); err != nil {
-			result.Err = model.NewAppError("SqlCommandStore.GetByTeam", "store.sql_command.save.get_team.app_error", nil, "teamId="+teamId+", err="+err.Error(), http.StatusInternalServerError)
-		}
+	sql, args, err := s.commandsQuery.
+		Where(sq.Eq{"TeamId": teamId, "DeleteAt": 0}).ToSql()
+	if err != nil {
+		return nil, errors.Wrapf(err, "commands_tosql")
+	}
+	if _, err := s.GetReplica().Select(&commands, sql, args...); err != nil {
+		return nil, errors.Wrapf(err, "select: team_id=%s", teamId)
+	}
 
-		result.Data = commands
-	})
+	return commands, nil
 }
 
-func (s SqlCommandStore) GetByTrigger(teamId string, trigger string) store.StoreChannel {
-	return store.Do(func(result *store.StoreResult) {
-		var command model.Command
+func (s SqlCommandStore) GetByTrigger(teamId string, trigger string) (*model.Command, error) {
+	var command model.Command
+	var triggerStr string
+	if s.DriverName() == "mysql" {
+		triggerStr = "`Trigger`"
+	} else {
+		triggerStr = "\"trigger\""
+	}
 
-		var query string
-		if s.DriverName() == "mysql" {
-			query = "SELECT * FROM Commands WHERE TeamId = :TeamId AND `Trigger` = :Trigger AND DeleteAt = 0"
-		} else {
-			query = "SELECT * FROM Commands WHERE TeamId = :TeamId AND \"trigger\" = :Trigger AND DeleteAt = 0"
-		}
+	query, args, err := s.commandsQuery.
+		Where(sq.Eq{"TeamId": teamId, "DeleteAt": 0, triggerStr: trigger}).ToSql()
+	if err != nil {
+		return nil, errors.Wrapf(err, "commands_tosql")
+	}
 
-		if err := s.GetReplica().SelectOne(&command, query, map[string]interface{}{"TeamId": teamId, "Trigger": trigger}); err != nil {
-			result.Err = model.NewAppError("SqlCommandStore.GetByTrigger", "store.sql_command.get_by_trigger.app_error", nil, "teamId="+teamId+", trigger="+trigger+", err="+err.Error(), http.StatusInternalServerError)
-		}
+	if err := s.GetReplica().SelectOne(&command, query, args...); err == sql.ErrNoRows {
+		errorId := "teamId=" + teamId + ", trigger=" + trigger
+		return nil, store.NewErrNotFound("Command", errorId)
+	} else if err != nil {
+		return nil, errors.Wrapf(err, "selectone: team_id=%s, trigger=%s", teamId, trigger)
+	}
 
-		result.Data = &command
-	})
+	return &command, nil
 }
 
-func (s SqlCommandStore) Delete(commandId string, time int64) store.StoreChannel {
-	return store.Do(func(result *store.StoreResult) {
-		_, err := s.GetMaster().Exec("Update Commands SET DeleteAt = :DeleteAt, UpdateAt = :UpdateAt WHERE Id = :Id", map[string]interface{}{"DeleteAt": time, "UpdateAt": time, "Id": commandId})
-		if err != nil {
-			result.Err = model.NewAppError("SqlCommandStore.Delete", "store.sql_command.save.delete.app_error", nil, "id="+commandId+", err="+err.Error(), http.StatusInternalServerError)
-		}
-	})
+func (s SqlCommandStore) Delete(commandId string, time int64) error {
+	sql, args, err := s.getQueryBuilder().
+		Update("Commands").
+		SetMap(sq.Eq{"DeleteAt": time, "UpdateAt": time}).
+		Where(sq.Eq{"Id": commandId}).ToSql()
+	if err != nil {
+		return errors.Wrapf(err, "commands_tosql")
+	}
+
+	_, err = s.GetMaster().Exec(sql, args...)
+	if err != nil {
+		errors.Wrapf(err, "delete: command_id=%s", commandId)
+	}
+
+	return nil
 }
 
-func (s SqlCommandStore) PermanentDeleteByTeam(teamId string) store.StoreChannel {
-	return store.Do(func(result *store.StoreResult) {
-		_, err := s.GetMaster().Exec("DELETE FROM Commands WHERE TeamId = :TeamId", map[string]interface{}{"TeamId": teamId})
-		if err != nil {
-			result.Err = model.NewAppError("SqlCommandStore.DeleteByTeam", "store.sql_command.save.delete_perm.app_error", nil, "id="+teamId+", err="+err.Error(), http.StatusInternalServerError)
-		}
-	})
+func (s SqlCommandStore) PermanentDeleteByTeam(teamId string) error {
+	sql, args, err := s.getQueryBuilder().
+		Delete("Commands").
+		Where(sq.Eq{"TeamId": teamId}).ToSql()
+	if err != nil {
+		return errors.Wrapf(err, "commands_tosql")
+	}
+	_, err = s.GetMaster().Exec(sql, args...)
+	if err != nil {
+		return errors.Wrapf(err, "delete: team_id=%s", teamId)
+	}
+	return nil
 }
 
-func (s SqlCommandStore) PermanentDeleteByUser(userId string) store.StoreChannel {
-	return store.Do(func(result *store.StoreResult) {
-		_, err := s.GetMaster().Exec("DELETE FROM Commands WHERE CreatorId = :UserId", map[string]interface{}{"UserId": userId})
-		if err != nil {
-			result.Err = model.NewAppError("SqlCommandStore.DeleteByUser", "store.sql_command.save.delete_perm.app_error", nil, "id="+userId+", err="+err.Error(), http.StatusInternalServerError)
-		}
-	})
+func (s SqlCommandStore) PermanentDeleteByUser(userId string) error {
+	sql, args, err := s.getQueryBuilder().
+		Delete("Commands").
+		Where(sq.Eq{"CreatorId": userId}).ToSql()
+	if err != nil {
+		return errors.Wrapf(err, "commands_tosql")
+	}
+	_, err = s.GetMaster().Exec(sql, args...)
+	if err != nil {
+		return errors.Wrapf(err, "delete: user_id=%s", userId)
+	}
+
+	return nil
 }
 
-func (s SqlCommandStore) Update(cmd *model.Command) store.StoreChannel {
-	return store.Do(func(result *store.StoreResult) {
-		cmd.UpdateAt = model.GetMillis()
+func (s SqlCommandStore) Update(cmd *model.Command) (*model.Command, error) {
+	cmd.UpdateAt = model.GetMillis()
 
-		if result.Err = cmd.IsValid(); result.Err != nil {
-			return
-		}
+	if err := cmd.IsValid(); err != nil {
+		return nil, err
+	}
 
-		if _, err := s.GetMaster().Update(cmd); err != nil {
-			result.Err = model.NewAppError("SqlCommandStore.Update", "store.sql_command.save.update.app_error", nil, "id="+cmd.Id+", "+err.Error(), http.StatusInternalServerError)
-		} else {
-			result.Data = cmd
-		}
-	})
+	if _, err := s.GetMaster().Update(cmd); err != nil {
+		return nil, errors.Wrapf(err, "update: command_id=%s", cmd.Id)
+	}
+
+	return cmd, nil
 }
 
-func (s SqlCommandStore) AnalyticsCommandCount(teamId string) store.StoreChannel {
-	return store.Do(func(result *store.StoreResult) {
-		query :=
-			`SELECT
-			    COUNT(*)
-			FROM
-			    Commands
-			WHERE
-			    DeleteAt = 0`
+func (s SqlCommandStore) AnalyticsCommandCount(teamId string) (int64, error) {
+	query := s.getQueryBuilder().
+		Select("COUNT(*)").
+		From("Commands").
+		Where(sq.Eq{"DeleteAt": 0})
 
-		if len(teamId) > 0 {
-			query += " AND TeamId = :TeamId"
-		}
+	if len(teamId) > 0 {
+		query = query.Where(sq.Eq{"TeamId": teamId})
+	}
 
-		if c, err := s.GetReplica().SelectInt(query, map[string]interface{}{"TeamId": teamId}); err != nil {
-			result.Err = model.NewAppError("SqlCommandStore.AnalyticsCommandCount", "store.sql_command.analytics_command_count.app_error", nil, err.Error(), http.StatusInternalServerError)
-		} else {
-			result.Data = c
-		}
-	})
+	sql, args, err := query.ToSql()
+	if err != nil {
+		return 0, errors.Wrapf(err, "commands_tosql")
+	}
+
+	c, err := s.GetReplica().SelectInt(sql, args...)
+	if err != nil {
+		return 0, errors.Wrapf(err, "unable to count the commands: team_id=%s", teamId)
+	}
+	return c, nil
 }

@@ -1,20 +1,21 @@
-// Copyright (c) 2017-present Mattermost, Inc. All Rights Reserved.
-// See License.txt for license information.
+// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// See LICENSE.txt for license information.
 
 package imageproxy
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
+	"mime"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"strings"
-	"time"
+	"path/filepath"
 
-	"github.com/mattermost/mattermost-server/mlog"
-	"github.com/mattermost/mattermost-server/services/httpservice"
+	"github.com/mattermost/mattermost-server/v5/mlog"
+	"github.com/mattermost/mattermost-server/v5/services/httpservice"
 	"willnorris.com/go/imageproxy"
 )
 
@@ -43,6 +44,15 @@ type LocalBackend struct {
 func makeLocalBackend(proxy *ImageProxy) *LocalBackend {
 	impl := imageproxy.NewProxy(proxy.HTTPService.MakeTransport(false), nil)
 
+	if proxy.Logger != nil {
+		logger, err := proxy.Logger.StdLogAt(mlog.LevelDebug, mlog.String("image_proxy", "local"))
+		if err != nil {
+			mlog.Error("Failed to initialize logger for image proxy", mlog.Err(err))
+		}
+
+		impl.Logger = logger
+	}
+
 	baseURL, err := url.Parse(*proxy.ConfigService.Config().ServiceSettings.SiteURL)
 	if err != nil {
 		mlog.Error("Failed to set base URL for image proxy. Relative image links may not work.", mlog.Err(err))
@@ -50,13 +60,31 @@ func makeLocalBackend(proxy *ImageProxy) *LocalBackend {
 		impl.DefaultBaseURL = baseURL
 	}
 
-	impl.Timeout = time.Duration(httpservice.RequestTimeout)
+	impl.Timeout = httpservice.RequestTimeout
 	impl.ContentTypes = imageContentTypes
 
 	return &LocalBackend{
 		proxy: proxy,
 		impl:  impl,
 	}
+}
+
+type contentTypeRecorder struct {
+	http.ResponseWriter
+	filename string
+}
+
+func (rec *contentTypeRecorder) WriteHeader(code int) {
+	hdr := rec.ResponseWriter.Header()
+	contentType := hdr.Get("Content-Type")
+	mediaType, _, err := mime.ParseMediaType(contentType)
+	// The error is caused by a malformed input and there's not much use logging it.
+	// Therefore, even in the error case we set it to attachment mode to be safe.
+	if err != nil || mediaType == "image/svg+xml" {
+		hdr.Set("Content-Disposition", fmt.Sprintf("attachment;filename=%q", rec.filename))
+	}
+
+	rec.ResponseWriter.WriteHeader(code)
 }
 
 func (backend *LocalBackend) GetImage(w http.ResponseWriter, r *http.Request, imageURL string) {
@@ -71,12 +99,21 @@ func (backend *LocalBackend) GetImage(w http.ResponseWriter, r *http.Request, im
 		return
 	}
 
+	u, err := url.Parse(imageURL)
+	if err != nil {
+		mlog.Error("Failed to parse URL for proxied image", mlog.String("url", imageURL), mlog.Err(err))
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte{})
+		return
+	}
+
 	w.Header().Set("X-Frame-Options", "deny")
 	w.Header().Set("X-XSS-Protection", "1; mode=block")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Content-Security-Policy", "default-src 'none'; img-src data:; style-src 'unsafe-inline'")
 
-	backend.impl.ServeHTTP(w, req)
+	rec := contentTypeRecorder{w, filepath.Base(u.Path)}
+	backend.impl.ServeHTTP(&rec, req)
 }
 
 func (backend *LocalBackend) GetImageDirect(imageURL string) (io.ReadCloser, string, error) {
@@ -95,34 +132,4 @@ func (backend *LocalBackend) GetImageDirect(imageURL string) (io.ReadCloser, str
 	}
 
 	return ioutil.NopCloser(recorder.Body), recorder.Header().Get("Content-Type"), nil
-}
-
-func (backend *LocalBackend) GetProxiedImageURL(imageURL string) string {
-	siteURL := *backend.proxy.ConfigService.Config().ServiceSettings.SiteURL
-
-	if imageURL == "" || imageURL[0] == '/' || strings.HasPrefix(imageURL, siteURL) {
-		return imageURL
-	}
-
-	return siteURL + "/api/v4/image?url=" + url.QueryEscape(imageURL)
-}
-
-func (backend *LocalBackend) GetUnproxiedImageURL(proxiedURL string) string {
-	siteURL := *backend.proxy.ConfigService.Config().ServiceSettings.SiteURL
-
-	if !strings.HasPrefix(proxiedURL, siteURL+"/api/v4/image?url=") {
-		return proxiedURL
-	}
-
-	parsed, err := url.Parse(proxiedURL)
-	if err != nil {
-		return proxiedURL
-	}
-
-	u := parsed.Query()["url"]
-	if len(u) == 0 {
-		return proxiedURL
-	}
-
-	return u[0]
 }

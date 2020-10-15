@@ -1,17 +1,18 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
-// See License.txt for license information.
+// See LICENSE.txt for license information.
 
 package sqlstore
 
 import (
 	"database/sql"
 	"fmt"
-	"net/http"
 
-	"github.com/mattermost/mattermost-server/einterfaces"
-	"github.com/mattermost/mattermost-server/model"
-	"github.com/mattermost/mattermost-server/store"
-	"github.com/mattermost/mattermost-server/utils"
+	sq "github.com/Masterminds/squirrel"
+	"github.com/pkg/errors"
+
+	"github.com/mattermost/mattermost-server/v5/einterfaces"
+	"github.com/mattermost/mattermost-server/v5/model"
+	"github.com/mattermost/mattermost-server/v5/store"
 )
 
 type SqlFileInfoStore struct {
@@ -19,21 +20,10 @@ type SqlFileInfoStore struct {
 	metrics einterfaces.MetricsInterface
 }
 
-const (
-	FILE_INFO_CACHE_SIZE = 25000
-	FILE_INFO_CACHE_SEC  = 1800 // 30 minutes
-)
-
-var fileInfoCache *utils.Cache = utils.NewLru(FILE_INFO_CACHE_SIZE)
-
 func (fs SqlFileInfoStore) ClearCaches() {
-	fileInfoCache.Purge()
-	if fs.metrics != nil {
-		fs.metrics.IncrementMemCacheInvalidationCounter("File Info Cache - Purge")
-	}
 }
 
-func NewSqlFileInfoStore(sqlStore SqlStore, metrics einterfaces.MetricsInterface) store.FileInfoStore {
+func newSqlFileInfoStore(sqlStore SqlStore, metrics einterfaces.MetricsInterface) store.FileInfoStore {
 	s := &SqlFileInfoStore{
 		SqlStore: sqlStore,
 		metrics:  metrics,
@@ -56,7 +46,7 @@ func NewSqlFileInfoStore(sqlStore SqlStore, metrics einterfaces.MetricsInterface
 	return s
 }
 
-func (fs SqlFileInfoStore) CreateIndexesIfNotExists() {
+func (fs SqlFileInfoStore) createIndexesIfNotExists() {
 	fs.CreateIndexIfNotExists("idx_fileinfo_update_at", "FileInfo", "UpdateAt")
 	fs.CreateIndexIfNotExists("idx_fileinfo_create_at", "FileInfo", "CreateAt")
 	fs.CreateIndexIfNotExists("idx_fileinfo_delete_at", "FileInfo", "DeleteAt")
@@ -64,65 +54,139 @@ func (fs SqlFileInfoStore) CreateIndexesIfNotExists() {
 	fs.CreateIndexIfNotExists("idx_fileinfo_channelid_at", "FileInfo", "ChannelId")
 }
 
-func (fs SqlFileInfoStore) Save(info *model.FileInfo) store.StoreChannel {
-	return store.Do(func(result *store.StoreResult) {
-		info.PreSave()
-		if result.Err = info.IsValid(); result.Err != nil {
-			return
-		}
+func (fs SqlFileInfoStore) Save(info *model.FileInfo) (*model.FileInfo, error) {
+	info.PreSave()
+	if err := info.IsValid(); err != nil {
+		return nil, err
+	}
 
-		if err := fs.GetMaster().Insert(info); err != nil {
-			result.Err = model.NewAppError("SqlFileInfoStore.Save", "store.sql_file_info.save.app_error", nil, err.Error(), http.StatusInternalServerError)
-		} else {
-			result.Data = info
-		}
-	})
+	if err := fs.GetMaster().Insert(info); err != nil {
+		return nil, errors.Wrap(err, "failed to save FileInfo")
+	}
+	return info, nil
 }
 
-func (fs SqlFileInfoStore) GetByChannelId(channelId string, limit int, offset int) store.StoreChannel {
-	return store.Do(func(result *store.StoreResult) {
-		fmt.Printf("ChannelId=%v, offset=%v, limit=%v", channelId, offset, limit)
-		var infos []*model.FileInfo
-		_, err := fs.GetReplica().Select(&infos, "SELECT * FROM FileInfo WHERE ChannelId = :ChannelId AND DeleteAt = 0 ORDER BY CreateAt DESC LIMIT :Limit OFFSET :Offset",
-			map[string]interface{}{"ChannelId": channelId, "Offset": offset, "Limit": limit})
+func (fs SqlFileInfoStore) Upsert(info *model.FileInfo) (*model.FileInfo, error) {
+	info.PreSave()
+	if err := info.IsValid(); err != nil {
+		return nil, err
+	}
 
-		if err != nil {
-			result.Err = model.NewAppError("SqlFileInfoStore.GetByChannelId", "store.sql_file_info.get.app_error", nil, "channelId="+channelId+", "+err.Error(), http.StatusInternalServerError)
-		} else {
-			result.Data = infos
+	n, err := fs.GetMaster().Update(info)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to update FileInfo")
+	}
+	if n == 0 {
+		if err = fs.GetMaster().Insert(info); err != nil {
+			return nil, errors.Wrap(err, "failed to save FileInfo")
 		}
-	})
+	}
+	return info, nil
 }
 
-func (fs SqlFileInfoStore) Get(id string) store.StoreChannel {
-	return store.Do(func(result *store.StoreResult) {
-		info := &model.FileInfo{}
+func (fs SqlFileInfoStore) Get(id string) (*model.FileInfo, error) {
+	info := &model.FileInfo{}
 
-		if err := fs.GetReplica().SelectOne(info,
-			`SELECT
-				*
-			FROM
-				FileInfo
-			WHERE
-				Id = :Id
-				AND DeleteAt = 0`, map[string]interface{}{"Id": id}); err != nil {
-			if err == sql.ErrNoRows {
-				result.Err = model.NewAppError("SqlFileInfoStore.Get", "store.sql_file_info.get.app_error", nil, "id="+id+", "+err.Error(), http.StatusNotFound)
-			} else {
-				result.Err = model.NewAppError("SqlFileInfoStore.Get", "store.sql_file_info.get.app_error", nil, "id="+id+", "+err.Error(), http.StatusInternalServerError)
-			}
-		} else {
-			result.Data = info
+	if err := fs.GetReplica().SelectOne(info,
+		`SELECT
+			*
+		FROM
+			FileInfo
+		WHERE
+			Id = :Id
+			AND DeleteAt = 0`, map[string]interface{}{"Id": id}); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, store.NewErrNotFound("FileInfo", id)
 		}
-	})
+		return nil, errors.Wrapf(err, "failed to get FileInfo with id=%s", id)
+	}
+	return info, nil
 }
 
-func (fs SqlFileInfoStore) GetByPath(path string) store.StoreChannel {
-	return store.Do(func(result *store.StoreResult) {
-		info := &model.FileInfo{}
+func (fs SqlFileInfoStore) GetByChannelId(channelId string, limit int, offset int) ([]*model.FileInfo, error) {
 
-		if err := fs.GetReplica().SelectOne(info,
-			`SELECT
+	var infos []*model.FileInfo
+	_, err := fs.GetReplica().Select(&infos, "SELECT * FROM FileInfo WHERE ChannelId = :ChannelId AND DeleteAt = 0 ORDER BY CreateAt DESC LIMIT :Limit OFFSET :Offset",
+		map[string]interface{}{"ChannelId": channelId, "Offset": offset, "Limit": limit})
+
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to find FileInfos")
+	}
+	return infos, nil
+}
+
+func (fs SqlFileInfoStore) GetWithOptions(page, perPage int, opt *model.GetFileInfosOptions) ([]*model.FileInfo, error) {
+	if perPage < 0 {
+		return nil, store.NewErrLimitExceeded("perPage", perPage, "value used in pagination while getting FileInfos")
+	} else if page < 0 {
+		return nil, store.NewErrLimitExceeded("page", page, "value used in pagination while getting FileInfos")
+	}
+	if perPage == 0 {
+		return nil, nil
+	}
+
+	if opt == nil {
+		opt = &model.GetFileInfosOptions{}
+	}
+
+	query := fs.getQueryBuilder().
+		Select("FileInfo.*").
+		From("FileInfo")
+
+	if len(opt.ChannelIds) > 0 {
+		query = query.Join("Posts ON FileInfo.PostId = Posts.Id").
+			Where(sq.Eq{"Posts.ChannelId": opt.ChannelIds})
+	}
+
+	if len(opt.UserIds) > 0 {
+		query = query.Where(sq.Eq{"FileInfo.CreatorId": opt.UserIds})
+	}
+
+	if opt.Since > 0 {
+		query = query.Where(sq.GtOrEq{"FileInfo.CreateAt": opt.Since})
+	}
+
+	if !opt.IncludeDeleted {
+		query = query.Where("FileInfo.DeleteAt = 0")
+	}
+
+	if opt.SortBy == "" {
+		opt.SortBy = model.FILEINFO_SORT_BY_CREATED
+	}
+	sortDirection := "ASC"
+	if opt.SortDescending {
+		sortDirection = "DESC"
+	}
+
+	switch opt.SortBy {
+	case model.FILEINFO_SORT_BY_CREATED:
+		query = query.OrderBy("FileInfo.CreateAt " + sortDirection)
+	case model.FILEINFO_SORT_BY_SIZE:
+		query = query.OrderBy("FileInfo.Size " + sortDirection)
+	default:
+		return nil, store.NewErrInvalidInput("FileInfo", "<sortOption>", opt.SortBy)
+	}
+
+	query = query.OrderBy("FileInfo.Id ASC") // secondary sort for sort stability
+
+	query = query.Limit(uint64(perPage)).Offset(uint64(perPage * page))
+
+	queryString, args, err := query.ToSql()
+	if err != nil {
+		return nil, errors.Wrap(err, "file_info_tosql")
+	}
+	var infos []*model.FileInfo
+	if _, err := fs.GetReplica().Select(&infos, queryString, args...); err != nil {
+		return nil, errors.Wrap(err, "failed to find FileInfos")
+	}
+	return infos, nil
+}
+
+func (fs SqlFileInfoStore) GetByPath(path string) (*model.FileInfo, error) {
+	info := &model.FileInfo{}
+
+	if err := fs.GetReplica().SelectOne(info,
+		`SELECT
 				*
 			FROM
 				FileInfo
@@ -130,79 +194,55 @@ func (fs SqlFileInfoStore) GetByPath(path string) store.StoreChannel {
 				Path = :Path
 				AND DeleteAt = 0
 			LIMIT 1`, map[string]interface{}{"Path": path}); err != nil {
-			result.Err = model.NewAppError("SqlFileInfoStore.GetByPath", "store.sql_file_info.get_by_path.app_error", nil, "path="+path+", "+err.Error(), http.StatusInternalServerError)
-		} else {
-			result.Data = info
+		if err == sql.ErrNoRows {
+			return nil, store.NewErrNotFound("FileInfo", fmt.Sprintf("path=%s", path))
 		}
-	})
-}
 
-func (fs SqlFileInfoStore) InvalidateFileInfosForPostCache(postId string) {
-	fileInfoCache.Remove(postId)
-	if fs.metrics != nil {
-		fs.metrics.IncrementMemCacheInvalidationCounter("File Info Cache - Remove by PostId")
+		return nil, errors.Wrapf(err, "failed to get FileInfo with path=%s", path)
 	}
+	return info, nil
 }
 
-func (fs SqlFileInfoStore) GetForPost(postId string, readFromMaster bool, allowFromCache bool) store.StoreChannel {
-	return store.Do(func(result *store.StoreResult) {
-		if allowFromCache {
-			if cacheItem, ok := fileInfoCache.Get(postId); ok {
-				if fs.metrics != nil {
-					fs.metrics.IncrementMemCacheHitCounter("File Info Cache")
-				}
-
-				result.Data = cacheItem.([]*model.FileInfo)
-				return
-			} else {
-				if fs.metrics != nil {
-					fs.metrics.IncrementMemCacheMissCounter("File Info Cache")
-				}
-			}
-		} else {
-			if fs.metrics != nil {
-				fs.metrics.IncrementMemCacheMissCounter("File Info Cache")
-			}
-		}
-
-		var infos []*model.FileInfo
-
-		dbmap := fs.GetReplica()
-
-		if readFromMaster {
-			dbmap = fs.GetMaster()
-		}
-
-		if _, err := dbmap.Select(&infos,
-			`SELECT
-				*
-			FROM
-				FileInfo
-			WHERE
-				PostId = :PostId
-				AND DeleteAt = 0
-			ORDER BY
-				CreateAt`, map[string]interface{}{"PostId": postId}); err != nil {
-			result.Err = model.NewAppError("SqlFileInfoStore.GetForPost",
-				"store.sql_file_info.get_for_post.app_error", nil, "post_id="+postId+", "+err.Error(), http.StatusInternalServerError)
-		} else {
-			if len(infos) > 0 {
-				fileInfoCache.AddWithExpiresInSecs(postId, infos, FILE_INFO_CACHE_SEC)
-			}
-
-			result.Data = infos
-		}
-	})
+func (fs SqlFileInfoStore) InvalidateFileInfosForPostCache(postId string, deleted bool) {
 }
 
-func (fs SqlFileInfoStore) GetForUser(userId string) store.StoreChannel {
-	return store.Do(func(result *store.StoreResult) {
-		var infos []*model.FileInfo
+func (fs SqlFileInfoStore) GetForPost(postId string, readFromMaster, includeDeleted, allowFromCache bool) ([]*model.FileInfo, error) {
+	var infos []*model.FileInfo
 
-		dbmap := fs.GetReplica()
+	dbmap := fs.GetReplica()
 
-		if _, err := dbmap.Select(&infos,
-			`SELECT
+	if readFromMaster {
+		dbmap = fs.GetMaster()
+	}
+
+	query := fs.getQueryBuilder().
+		Select("*").
+		From("FileInfo").
+		Where(sq.Eq{"PostId": postId}).
+		OrderBy("CreateAt")
+
+	if !includeDeleted {
+		query = query.Where("DeleteAt = 0")
+	}
+
+	queryString, args, err := query.ToSql()
+	if err != nil {
+		return nil, errors.Wrap(err, "file_info_tosql")
+	}
+
+	if _, err := dbmap.Select(&infos, queryString, args...); err != nil {
+		return nil, errors.Wrapf(err, "failed to find FileInfos with postId=%s", postId)
+	}
+	return infos, nil
+}
+
+func (fs SqlFileInfoStore) GetForUser(userId string) ([]*model.FileInfo, error) {
+	var infos []*model.FileInfo
+
+	dbmap := fs.GetReplica()
+
+	if _, err := dbmap.Select(&infos,
+		`SELECT
 				*
 			FROM
 				FileInfo
@@ -211,113 +251,98 @@ func (fs SqlFileInfoStore) GetForUser(userId string) store.StoreChannel {
 				AND DeleteAt = 0
 			ORDER BY
 				CreateAt`, map[string]interface{}{"CreatorId": userId}); err != nil {
-			result.Err = model.NewAppError("SqlFileInfoStore.GetForPost",
-				"store.sql_file_info.get_for_user_id.app_error", nil, "creator_id="+userId+", "+err.Error(), http.StatusInternalServerError)
-		} else {
-			result.Data = infos
-		}
-	})
+		return nil, errors.Wrapf(err, "failed to find FileInfos with creatorId=%s", userId)
+	}
+	return infos, nil
 }
 
-func (fs SqlFileInfoStore) AttachToPost(fileId, postId, creatorId string) store.StoreChannel {
-	return store.Do(func(result *store.StoreResult) {
-		sqlResult, err := fs.GetMaster().Exec(
-			`UPDATE
-					FileInfo
-				SET
-					PostId = :PostId
-				WHERE
-					Id = :Id
-					AND PostId = ''
-					AND CreatorId = :CreatorId`, map[string]interface{}{"PostId": postId, "Id": fileId, "CreatorId": creatorId})
-		if err != nil {
-			result.Err = model.NewAppError("SqlFileInfoStore.AttachToPost",
-				"store.sql_file_info.attach_to_post.app_error", nil, "post_id="+postId+", file_id="+fileId+", err="+err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		count, err := sqlResult.RowsAffected()
-		if err != nil {
-			// RowsAffected should never fail with the MySQL or Postgres drivers
-			result.Err = model.NewAppError("SqlFileInfoStore.AttachToPost",
-				"store.sql_file_info.attach_to_post.app_error", nil, "post_id="+postId+", file_id="+fileId+", err="+err.Error(), http.StatusInternalServerError)
-		} else if count == 0 {
-			// Could not attach the file to the post
-			result.Err = model.NewAppError("SqlFileInfoStore.AttachToPost",
-				"store.sql_file_info.attach_to_post.app_error", nil, "post_id="+postId+", file_id="+fileId, http.StatusBadRequest)
-		}
+func (fs SqlFileInfoStore) AttachToPost(fileId, postId, creatorId string) error {
+	sqlResult, err := fs.GetMaster().Exec(`
+		UPDATE
+			FileInfo
+		SET
+			PostId = :PostId
+		WHERE
+			Id = :Id
+			AND PostId = ''
+			AND (CreatorId = :CreatorId OR CreatorId = 'nouser')
+	`, map[string]interface{}{
+		"PostId":    postId,
+		"Id":        fileId,
+		"CreatorId": creatorId,
 	})
+	if err != nil {
+		return errors.Wrapf(err, "failed to update FileInfo with id=%s and postId=%s", fileId, postId)
+	}
+
+	count, err := sqlResult.RowsAffected()
+	if err != nil {
+		// RowsAffected should never fail with the MySQL or Postgres drivers
+		return errors.Wrap(err, "unable to retrieve rows affected")
+	} else if count == 0 {
+		// Could not attach the file to the post
+		return store.NewErrInvalidInput("FileInfo", "<id, postId, creatorId>", fmt.Sprintf("<%s, %s, %s>", fileId, postId, creatorId))
+	}
+	return nil
 }
 
-func (fs SqlFileInfoStore) DeleteForPost(postId string) store.StoreChannel {
-	return store.Do(func(result *store.StoreResult) {
-		if _, err := fs.GetMaster().Exec(
-			`UPDATE
+func (fs SqlFileInfoStore) DeleteForPost(postId string) (string, error) {
+	if _, err := fs.GetMaster().Exec(
+		`UPDATE
 				FileInfo
 			SET
 				DeleteAt = :DeleteAt
 			WHERE
 				PostId = :PostId`, map[string]interface{}{"DeleteAt": model.GetMillis(), "PostId": postId}); err != nil {
-			result.Err = model.NewAppError("SqlFileInfoStore.DeleteForPost",
-				"store.sql_file_info.delete_for_post.app_error", nil, "post_id="+postId+", err="+err.Error(), http.StatusInternalServerError)
-		} else {
-			result.Data = postId
-		}
-	})
+		return "", errors.Wrapf(err, "failed to update FileInfo with postId=%s", postId)
+	}
+	return postId, nil
 }
 
-func (fs SqlFileInfoStore) PermanentDelete(fileId string) store.StoreChannel {
-	return store.Do(func(result *store.StoreResult) {
-		if _, err := fs.GetMaster().Exec(
-			`DELETE FROM
+func (fs SqlFileInfoStore) PermanentDelete(fileId string) error {
+	if _, err := fs.GetMaster().Exec(
+		`DELETE FROM
 				FileInfo
 			WHERE
 				Id = :FileId`, map[string]interface{}{"FileId": fileId}); err != nil {
-			result.Err = model.NewAppError("SqlFileInfoStore.PermanentDelete",
-				"store.sql_file_info.permanent_delete.app_error", nil, "file_id="+fileId+", err="+err.Error(), http.StatusInternalServerError)
-		}
-	})
+		return errors.Wrapf(err, "failed to delete FileInfo with id=%s", fileId)
+	}
+	return nil
 }
 
-func (s SqlFileInfoStore) PermanentDeleteBatch(endTime int64, limit int64) store.StoreChannel {
-	return store.Do(func(result *store.StoreResult) {
-		var query string
-		if s.DriverName() == "postgres" {
-			query = "DELETE from FileInfo WHERE Id = any (array (SELECT Id FROM FileInfo WHERE CreateAt < :EndTime LIMIT :Limit))"
-		} else {
-			query = "DELETE from FileInfo WHERE CreateAt < :EndTime LIMIT :Limit"
-		}
+func (fs SqlFileInfoStore) PermanentDeleteBatch(endTime int64, limit int64) (int64, error) {
+	var query string
+	if fs.DriverName() == "postgres" {
+		query = "DELETE from FileInfo WHERE Id = any (array (SELECT Id FROM FileInfo WHERE CreateAt < :EndTime LIMIT :Limit))"
+	} else {
+		query = "DELETE from FileInfo WHERE CreateAt < :EndTime LIMIT :Limit"
+	}
 
-		sqlResult, err := s.GetMaster().Exec(query, map[string]interface{}{"EndTime": endTime, "Limit": limit})
-		if err != nil {
-			result.Err = model.NewAppError("SqlFileInfoStore.PermanentDeleteBatch", "store.sql_file_info.permanent_delete_batch.app_error", nil, ""+err.Error(), http.StatusInternalServerError)
-		} else {
-			rowsAffected, err1 := sqlResult.RowsAffected()
-			if err1 != nil {
-				result.Err = model.NewAppError("SqlFileInfoStore.PermanentDeleteBatch", "store.sql_file_info.permanent_delete_batch.app_error", nil, ""+err.Error(), http.StatusInternalServerError)
-				result.Data = int64(0)
-			} else {
-				result.Data = rowsAffected
-			}
-		}
-	})
+	sqlResult, err := fs.GetMaster().Exec(query, map[string]interface{}{"EndTime": endTime, "Limit": limit})
+	if err != nil {
+		return 0, errors.Wrap(err, "failed to delete FileInfos in batch")
+	}
+
+	rowsAffected, err := sqlResult.RowsAffected()
+	if err != nil {
+		return 0, errors.Wrapf(err, "unable to retrieve rows affected")
+	}
+
+	return rowsAffected, nil
 }
 
-func (s SqlFileInfoStore) PermanentDeleteByUser(userId string) store.StoreChannel {
-	return store.Do(func(result *store.StoreResult) {
-		query := "DELETE from FileInfo WHERE CreatorId = :CreatorId"
+func (fs SqlFileInfoStore) PermanentDeleteByUser(userId string) (int64, error) {
+	query := "DELETE from FileInfo WHERE CreatorId = :CreatorId"
 
-		sqlResult, err := s.GetMaster().Exec(query, map[string]interface{}{"CreatorId": userId})
-		if err != nil {
-			result.Err = model.NewAppError("SqlFileInfoStore.PermanentDeleteByUser", "store.sql_file_info.PermanentDeleteByUser.app_error", nil, ""+err.Error(), http.StatusInternalServerError)
-		} else {
-			rowsAffected, err1 := sqlResult.RowsAffected()
-			if err1 != nil {
-				result.Err = model.NewAppError("SqlFileInfoStore.PermanentDeleteByUser", "store.sql_file_info.PermanentDeleteByUser.app_error", nil, ""+err.Error(), http.StatusInternalServerError)
-				result.Data = int64(0)
-			} else {
-				result.Data = rowsAffected
-			}
-		}
-	})
+	sqlResult, err := fs.GetMaster().Exec(query, map[string]interface{}{"CreatorId": userId})
+	if err != nil {
+		return 0, errors.Wrapf(err, "failed to delete FileInfo with creatorId=%s", userId)
+	}
+
+	rowsAffected, err := sqlResult.RowsAffected()
+	if err != nil {
+		return 0, errors.Wrapf(err, "unable to retrieve rows affected")
+	}
+
+	return rowsAffected, nil
 }

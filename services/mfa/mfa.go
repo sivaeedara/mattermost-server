@@ -1,23 +1,23 @@
-// Copyright (c) 2016 Mattermost, Inc. All Rights Reserved.
-// See License.txt for license information.
+// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// See LICENSE.txt for license information.
 
 package mfa
 
 import (
-	b32 "encoding/base32"
 	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
 
 	"github.com/dgryski/dgoogauth"
-	"github.com/mattermost/mattermost-server/model"
-	"github.com/mattermost/mattermost-server/services/configservice"
-	"github.com/mattermost/mattermost-server/store"
+	"github.com/mattermost/mattermost-server/v5/model"
+	"github.com/mattermost/mattermost-server/v5/services/configservice"
+	"github.com/mattermost/mattermost-server/v5/store"
 	"github.com/mattermost/rsc/qr"
 )
 
 const (
+	// This will result in 160 bits of entropy (base32 encoded), as recommended by rfc4226.
 	MFA_SECRET_SIZE = 20
 )
 
@@ -58,7 +58,7 @@ func (m *Mfa) GenerateSecret(user *model.User) (string, []byte, *model.AppError)
 
 	issuer := getIssuerFromUrl(*m.ConfigService.Config().ServiceSettings.SiteURL)
 
-	secret := b32.StdEncoding.EncodeToString([]byte(model.NewRandomString(MFA_SECRET_SIZE)))
+	secret := model.NewRandomBase32String(MFA_SECRET_SIZE)
 
 	authLink := fmt.Sprintf("otpauth://totp/%s:%s?secret=%s&issuer=%s", issuer, user.Email, secret, issuer)
 
@@ -70,8 +70,8 @@ func (m *Mfa) GenerateSecret(user *model.User) (string, []byte, *model.AppError)
 
 	img := code.PNG()
 
-	if result := <-m.Store.User().UpdateMfaSecret(user.Id, secret); result.Err != nil {
-		return "", nil, model.NewAppError("GenerateQrCode", "mfa.generate_qr_code.save_secret.app_error", nil, result.Err.Error(), http.StatusInternalServerError)
+	if err := m.Store.User().UpdateMfaSecret(user.Id, secret); err != nil {
+		return "", nil, model.NewAppError("GenerateQrCode", "mfa.generate_qr_code.save_secret.app_error", nil, err.Error(), http.StatusInternalServerError)
 	}
 
 	return secret, img, nil
@@ -99,8 +99,8 @@ func (m *Mfa) Activate(user *model.User, token string) *model.AppError {
 		return model.NewAppError("Activate", "mfa.activate.bad_token.app_error", nil, "", http.StatusUnauthorized)
 	}
 
-	if result := <-m.Store.User().UpdateMfaActive(user.Id, true); result.Err != nil {
-		return model.NewAppError("Activate", "mfa.activate.save_active.app_error", nil, result.Err.Error(), http.StatusInternalServerError)
+	if appErr := m.Store.User().UpdateMfaActive(user.Id, true); appErr != nil {
+		return model.NewAppError("Activate", "mfa.activate.save_active.app_error", nil, appErr.Error(), http.StatusInternalServerError)
 	}
 
 	return nil
@@ -111,15 +111,18 @@ func (m *Mfa) Deactivate(userId string) *model.AppError {
 		return err
 	}
 
-	achan := m.Store.User().UpdateMfaActive(userId, false)
-	schan := m.Store.User().UpdateMfaSecret(userId, "")
+	schan := make(chan *model.AppError, 1)
+	go func() {
+		schan <- m.Store.User().UpdateMfaSecret(userId, "")
+		close(schan)
+	}()
 
-	if result := <-achan; result.Err != nil {
-		return model.NewAppError("Deactivate", "mfa.deactivate.save_active.app_error", nil, result.Err.Error(), http.StatusInternalServerError)
+	if err := m.Store.User().UpdateMfaActive(userId, false); err != nil {
+		return model.NewAppError("Deactivate", "mfa.deactivate.save_active.app_error", nil, err.Error(), http.StatusInternalServerError)
 	}
 
-	if result := <-schan; result.Err != nil {
-		return model.NewAppError("Deactivate", "mfa.deactivate.save_secret.app_error", nil, result.Err.Error(), http.StatusInternalServerError)
+	if err := <-schan; err != nil {
+		return model.NewAppError("Deactivate", "mfa.deactivate.save_secret.app_error", nil, err.Error(), http.StatusInternalServerError)
 	}
 
 	return nil

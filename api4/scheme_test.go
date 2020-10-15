@@ -1,5 +1,5 @@
-// Copyright (c) 2018-present Mattermost, Inc. All Rights Reserved.
-// See License.txt for license information.
+// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// See LICENSE.txt for license information.
 
 package api4
 
@@ -8,15 +8,16 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
-	"github.com/mattermost/mattermost-server/model"
+	"github.com/mattermost/mattermost-server/v5/model"
 )
 
 func TestCreateScheme(t *testing.T) {
-	th := Setup().InitBasic()
+	th := Setup(t)
 	defer th.TearDown()
 
-	th.App.SetLicense(model.NewTestLicense("custom_permissions_schemes"))
+	th.App.Srv().SetLicense(model.NewTestLicense("custom_permissions_schemes"))
 
 	th.App.SetPhase2PermissionsMigrationStatus(true)
 
@@ -40,8 +41,10 @@ func TestCreateScheme(t *testing.T) {
 	assert.Equal(t, s1.Scope, scheme1.Scope)
 	assert.NotZero(t, len(s1.DefaultTeamAdminRole))
 	assert.NotZero(t, len(s1.DefaultTeamUserRole))
+	assert.NotZero(t, len(s1.DefaultTeamGuestRole))
 	assert.NotZero(t, len(s1.DefaultChannelAdminRole))
 	assert.NotZero(t, len(s1.DefaultChannelUserRole))
+	assert.NotZero(t, len(s1.DefaultChannelGuestRole))
 
 	// Check the default roles have been created.
 	_, roleRes1 := th.SystemAdminClient.GetRoleByName(s1.DefaultTeamAdminRole)
@@ -52,6 +55,10 @@ func TestCreateScheme(t *testing.T) {
 	CheckNoError(t, roleRes3)
 	_, roleRes4 := th.SystemAdminClient.GetRoleByName(s1.DefaultChannelUserRole)
 	CheckNoError(t, roleRes4)
+	_, roleRes5 := th.SystemAdminClient.GetRoleByName(s1.DefaultTeamGuestRole)
+	CheckNoError(t, roleRes5)
+	_, roleRes6 := th.SystemAdminClient.GetRoleByName(s1.DefaultChannelGuestRole)
+	CheckNoError(t, roleRes6)
 
 	// Basic Test of a Channel scheme.
 	scheme2 := &model.Scheme{
@@ -73,14 +80,18 @@ func TestCreateScheme(t *testing.T) {
 	assert.Equal(t, s2.Scope, scheme2.Scope)
 	assert.Zero(t, len(s2.DefaultTeamAdminRole))
 	assert.Zero(t, len(s2.DefaultTeamUserRole))
+	assert.Zero(t, len(s2.DefaultTeamGuestRole))
 	assert.NotZero(t, len(s2.DefaultChannelAdminRole))
 	assert.NotZero(t, len(s2.DefaultChannelUserRole))
+	assert.NotZero(t, len(s2.DefaultChannelGuestRole))
 
 	// Check the default roles have been created.
-	_, roleRes5 := th.SystemAdminClient.GetRoleByName(s2.DefaultChannelAdminRole)
-	CheckNoError(t, roleRes5)
-	_, roleRes6 := th.SystemAdminClient.GetRoleByName(s2.DefaultChannelUserRole)
-	CheckNoError(t, roleRes6)
+	_, roleRes7 := th.SystemAdminClient.GetRoleByName(s2.DefaultChannelAdminRole)
+	CheckNoError(t, roleRes7)
+	_, roleRes8 := th.SystemAdminClient.GetRoleByName(s2.DefaultChannelUserRole)
+	CheckNoError(t, roleRes8)
+	_, roleRes9 := th.SystemAdminClient.GetRoleByName(s2.DefaultChannelGuestRole)
+	CheckNoError(t, roleRes9)
 
 	// Try and create a scheme with an invalid scope.
 	scheme3 := &model.Scheme{
@@ -124,7 +135,7 @@ func TestCreateScheme(t *testing.T) {
 	CheckForbiddenStatus(t, r5)
 
 	// Try and create a scheme without a license.
-	th.App.SetLicense(nil)
+	th.App.Srv().SetLicense(nil)
 	scheme6 := &model.Scheme{
 		DisplayName: model.NewId(),
 		Name:        model.NewId(),
@@ -137,7 +148,7 @@ func TestCreateScheme(t *testing.T) {
 	th.App.SetPhase2PermissionsMigrationStatus(false)
 
 	th.LoginSystemAdmin()
-	th.App.SetLicense(model.NewTestLicense("custom_permissions_schemes"))
+	th.App.Srv().SetLicense(model.NewTestLicense("custom_permissions_schemes"))
 
 	scheme7 := &model.Scheme{
 		DisplayName: model.NewId(),
@@ -150,10 +161,10 @@ func TestCreateScheme(t *testing.T) {
 }
 
 func TestGetScheme(t *testing.T) {
-	th := Setup().InitBasic()
+	th := Setup(t).InitBasic()
 	defer th.TearDown()
 
-	th.App.SetLicense(model.NewTestLicense("custom_permissions_schemes"))
+	th.App.Srv().SetLicense(model.NewTestLicense("custom_permissions_schemes"))
 
 	// Basic test of creating a team scheme.
 	scheme1 := &model.Scheme{
@@ -177,8 +188,10 @@ func TestGetScheme(t *testing.T) {
 	assert.Equal(t, s1.Scope, scheme1.Scope)
 	assert.NotZero(t, len(s1.DefaultTeamAdminRole))
 	assert.NotZero(t, len(s1.DefaultTeamUserRole))
+	assert.NotZero(t, len(s1.DefaultTeamGuestRole))
 	assert.NotZero(t, len(s1.DefaultChannelAdminRole))
 	assert.NotZero(t, len(s1.DefaultChannelUserRole))
+	assert.NotZero(t, len(s1.DefaultChannelGuestRole))
 
 	s2, r2 := th.SystemAdminClient.GetScheme(s1.Id)
 	CheckNoError(t, r2)
@@ -196,7 +209,7 @@ func TestGetScheme(t *testing.T) {
 	CheckUnauthorizedStatus(t, r5)
 
 	th.SystemAdminClient.Login(th.SystemAdminUser.Username, th.SystemAdminUser.Password)
-	th.App.SetLicense(nil)
+	th.App.Srv().SetLicense(nil)
 	_, r6 := th.SystemAdminClient.GetScheme(s1.Id)
 	CheckNoError(t, r6)
 
@@ -210,10 +223,10 @@ func TestGetScheme(t *testing.T) {
 }
 
 func TestGetSchemes(t *testing.T) {
-	th := Setup().InitBasic()
+	th := Setup(t).InitBasic()
 	defer th.TearDown()
 
-	th.App.SetLicense(model.NewTestLicense("custom_permissions_schemes"))
+	th.App.Srv().SetLicense(model.NewTestLicense("custom_permissions_schemes"))
 
 	scheme1 := &model.Scheme{
 		DisplayName: model.NewId(),
@@ -273,10 +286,10 @@ func TestGetSchemes(t *testing.T) {
 }
 
 func TestGetTeamsForScheme(t *testing.T) {
-	th := Setup().InitBasic()
+	th := Setup(t).InitBasic()
 	defer th.TearDown()
 
-	th.App.SetLicense(model.NewTestLicense("custom_permissions_schemes"))
+	th.App.Srv().SetLicense(model.NewTestLicense("custom_permissions_schemes"))
 
 	th.App.SetPhase2PermissionsMigrationStatus(true)
 
@@ -295,18 +308,16 @@ func TestGetTeamsForScheme(t *testing.T) {
 		Type:        model.TEAM_OPEN,
 	}
 
-	result1 := <-th.App.Srv.Store.Team().Save(team1)
-	assert.Nil(t, result1.Err)
-	team1 = result1.Data.(*model.Team)
+	team1, err := th.App.Srv().Store.Team().Save(team1)
+	require.Nil(t, err)
 
 	l2, r2 := th.SystemAdminClient.GetTeamsForScheme(scheme1.Id, 0, 100)
 	CheckNoError(t, r2)
 	assert.Zero(t, len(l2))
 
 	team1.SchemeId = &scheme1.Id
-	result2 := <-th.App.Srv.Store.Team().Update(team1)
-	assert.Nil(t, result2.Err)
-	team1 = result2.Data.(*model.Team)
+	team1, err = th.App.Srv().Store.Team().Update(team1)
+	assert.Nil(t, err)
 
 	l3, r3 := th.SystemAdminClient.GetTeamsForScheme(scheme1.Id, 0, 100)
 	CheckNoError(t, r3)
@@ -319,9 +330,8 @@ func TestGetTeamsForScheme(t *testing.T) {
 		Type:        model.TEAM_OPEN,
 		SchemeId:    &scheme1.Id,
 	}
-	result3 := <-th.App.Srv.Store.Team().Save(team2)
-	assert.Nil(t, result3.Err)
-	team2 = result3.Data.(*model.Team)
+	team2, err = th.App.Srv().Store.Team().Save(team2)
+	require.Nil(t, err)
 
 	l4, r4 := th.SystemAdminClient.GetTeamsForScheme(scheme1.Id, 0, 100)
 	CheckNoError(t, r4)
@@ -368,10 +378,10 @@ func TestGetTeamsForScheme(t *testing.T) {
 }
 
 func TestGetChannelsForScheme(t *testing.T) {
-	th := Setup().InitBasic()
+	th := Setup(t).InitBasic()
 	defer th.TearDown()
 
-	th.App.SetLicense(model.NewTestLicense("custom_permissions_schemes"))
+	th.App.Srv().SetLicense(model.NewTestLicense("custom_permissions_schemes"))
 
 	th.App.SetPhase2PermissionsMigrationStatus(true)
 
@@ -391,18 +401,16 @@ func TestGetChannelsForScheme(t *testing.T) {
 		Type:        model.CHANNEL_OPEN,
 	}
 
-	result1 := <-th.App.Srv.Store.Channel().Save(channel1, 1000000)
-	assert.Nil(t, result1.Err)
-	channel1 = result1.Data.(*model.Channel)
+	channel1, errCh := th.App.Srv().Store.Channel().Save(channel1, 1000000)
+	assert.Nil(t, errCh)
 
 	l2, r2 := th.SystemAdminClient.GetChannelsForScheme(scheme1.Id, 0, 100)
 	CheckNoError(t, r2)
 	assert.Zero(t, len(l2))
 
 	channel1.SchemeId = &scheme1.Id
-	result2 := <-th.App.Srv.Store.Channel().Update(channel1)
-	assert.Nil(t, result2.Err)
-	channel1 = result2.Data.(*model.Channel)
+	channel1, err := th.App.Srv().Store.Channel().Update(channel1)
+	assert.Nil(t, err)
 
 	l3, r3 := th.SystemAdminClient.GetChannelsForScheme(scheme1.Id, 0, 100)
 	CheckNoError(t, r3)
@@ -416,9 +424,8 @@ func TestGetChannelsForScheme(t *testing.T) {
 		Type:        model.CHANNEL_OPEN,
 		SchemeId:    &scheme1.Id,
 	}
-	result3 := <-th.App.Srv.Store.Channel().Save(channel2, 1000000)
-	assert.Nil(t, result3.Err)
-	channel2 = result3.Data.(*model.Channel)
+	channel2, nErr := th.App.Srv().Store.Channel().Save(channel2, 1000000)
+	assert.Nil(t, nErr)
 
 	l4, r4 := th.SystemAdminClient.GetChannelsForScheme(scheme1.Id, 0, 100)
 	CheckNoError(t, r4)
@@ -465,10 +472,10 @@ func TestGetChannelsForScheme(t *testing.T) {
 }
 
 func TestPatchScheme(t *testing.T) {
-	th := Setup().InitBasic()
+	th := Setup(t)
 	defer th.TearDown()
 
-	th.App.SetLicense(model.NewTestLicense("custom_permissions_schemes"))
+	th.App.Srv().SetLicense(model.NewTestLicense("custom_permissions_schemes"))
 
 	th.App.SetPhase2PermissionsMigrationStatus(true)
 
@@ -492,8 +499,10 @@ func TestPatchScheme(t *testing.T) {
 	assert.Equal(t, s1.Scope, scheme1.Scope)
 	assert.NotZero(t, len(s1.DefaultTeamAdminRole))
 	assert.NotZero(t, len(s1.DefaultTeamUserRole))
+	assert.NotZero(t, len(s1.DefaultTeamGuestRole))
 	assert.NotZero(t, len(s1.DefaultChannelAdminRole))
 	assert.NotZero(t, len(s1.DefaultChannelUserRole))
+	assert.NotZero(t, len(s1.DefaultChannelGuestRole))
 
 	s2, r2 := th.SystemAdminClient.GetScheme(s1.Id)
 	CheckNoError(t, r2)
@@ -556,25 +565,25 @@ func TestPatchScheme(t *testing.T) {
 	CheckForbiddenStatus(t, r10)
 
 	// Test without license.
-	th.App.SetLicense(nil)
+	th.App.Srv().SetLicense(nil)
 	_, r11 := th.SystemAdminClient.PatchScheme(s6.Id, schemePatch)
 	CheckNotImplementedStatus(t, r11)
 
 	th.App.SetPhase2PermissionsMigrationStatus(false)
 
 	th.LoginSystemAdmin()
-	th.App.SetLicense(model.NewTestLicense("custom_permissions_schemes"))
+	th.App.Srv().SetLicense(model.NewTestLicense("custom_permissions_schemes"))
 
 	_, r12 := th.SystemAdminClient.PatchScheme(s6.Id, schemePatch)
 	CheckNotImplementedStatus(t, r12)
 }
 
 func TestDeleteScheme(t *testing.T) {
-	th := Setup().InitBasic()
+	th := Setup(t)
 	defer th.TearDown()
 
 	t.Run("ValidTeamScheme", func(t *testing.T) {
-		th.App.SetLicense(model.NewTestLicense("custom_permissions_schemes"))
+		th.App.Srv().SetLicense(model.NewTestLicense("custom_permissions_schemes"))
 
 		th.App.SetPhase2PermissionsMigrationStatus(true)
 
@@ -598,22 +607,27 @@ func TestDeleteScheme(t *testing.T) {
 		CheckNoError(t, roleRes3)
 		role4, roleRes4 := th.SystemAdminClient.GetRoleByName(s1.DefaultChannelUserRole)
 		CheckNoError(t, roleRes4)
+		role5, roleRes5 := th.SystemAdminClient.GetRoleByName(s1.DefaultTeamGuestRole)
+		CheckNoError(t, roleRes5)
+		role6, roleRes6 := th.SystemAdminClient.GetRoleByName(s1.DefaultChannelGuestRole)
+		CheckNoError(t, roleRes6)
 
 		assert.Zero(t, role1.DeleteAt)
 		assert.Zero(t, role2.DeleteAt)
 		assert.Zero(t, role3.DeleteAt)
 		assert.Zero(t, role4.DeleteAt)
+		assert.Zero(t, role5.DeleteAt)
+		assert.Zero(t, role6.DeleteAt)
 
 		// Make sure this scheme is in use by a team.
-		res := <-th.App.Srv.Store.Team().Save(&model.Team{
-			Name:        model.NewId(),
+		team, err := th.App.Srv().Store.Team().Save(&model.Team{
+			Name:        "zz" + model.NewId(),
 			DisplayName: model.NewId(),
 			Email:       model.NewId() + "@nowhere.com",
 			Type:        model.TEAM_OPEN,
 			SchemeId:    &s1.Id,
 		})
-		assert.Nil(t, res.Err)
-		team := res.Data.(*model.Team)
+		require.Nil(t, err)
 
 		// Delete the Scheme.
 		_, r3 := th.SystemAdminClient.DeleteScheme(s1.Id)
@@ -628,11 +642,17 @@ func TestDeleteScheme(t *testing.T) {
 		CheckNoError(t, roleRes3)
 		role4, roleRes4 = th.SystemAdminClient.GetRoleByName(s1.DefaultChannelUserRole)
 		CheckNoError(t, roleRes4)
+		role5, roleRes5 = th.SystemAdminClient.GetRoleByName(s1.DefaultTeamGuestRole)
+		CheckNoError(t, roleRes5)
+		role6, roleRes6 = th.SystemAdminClient.GetRoleByName(s1.DefaultChannelGuestRole)
+		CheckNoError(t, roleRes6)
 
 		assert.NotZero(t, role1.DeleteAt)
 		assert.NotZero(t, role2.DeleteAt)
 		assert.NotZero(t, role3.DeleteAt)
 		assert.NotZero(t, role4.DeleteAt)
+		assert.NotZero(t, role5.DeleteAt)
+		assert.NotZero(t, role6.DeleteAt)
 
 		// Check the team now uses the default scheme
 		c2, resp := th.SystemAdminClient.GetTeam(team.Id, "")
@@ -641,7 +661,7 @@ func TestDeleteScheme(t *testing.T) {
 	})
 
 	t.Run("ValidChannelScheme", func(t *testing.T) {
-		th.App.SetLicense(model.NewTestLicense("custom_permissions_schemes"))
+		th.App.Srv().SetLicense(model.NewTestLicense("custom_permissions_schemes"))
 
 		th.App.SetPhase2PermissionsMigrationStatus(true)
 
@@ -661,20 +681,22 @@ func TestDeleteScheme(t *testing.T) {
 		CheckNoError(t, roleRes3)
 		role4, roleRes4 := th.SystemAdminClient.GetRoleByName(s1.DefaultChannelUserRole)
 		CheckNoError(t, roleRes4)
+		role6, roleRes6 := th.SystemAdminClient.GetRoleByName(s1.DefaultChannelGuestRole)
+		CheckNoError(t, roleRes6)
 
 		assert.Zero(t, role3.DeleteAt)
 		assert.Zero(t, role4.DeleteAt)
+		assert.Zero(t, role6.DeleteAt)
 
 		// Make sure this scheme is in use by a team.
-		res := <-th.App.Srv.Store.Channel().Save(&model.Channel{
+		channel, err := th.App.Srv().Store.Channel().Save(&model.Channel{
 			TeamId:      model.NewId(),
 			DisplayName: model.NewId(),
 			Name:        model.NewId(),
 			Type:        model.CHANNEL_OPEN,
 			SchemeId:    &s1.Id,
 		}, -1)
-		assert.Nil(t, res.Err)
-		channel := res.Data.(*model.Channel)
+		assert.Nil(t, err)
 
 		// Delete the Scheme.
 		_, r3 := th.SystemAdminClient.DeleteScheme(s1.Id)
@@ -685,9 +707,12 @@ func TestDeleteScheme(t *testing.T) {
 		CheckNoError(t, roleRes3)
 		role4, roleRes4 = th.SystemAdminClient.GetRoleByName(s1.DefaultChannelUserRole)
 		CheckNoError(t, roleRes4)
+		role6, roleRes6 = th.SystemAdminClient.GetRoleByName(s1.DefaultChannelGuestRole)
+		CheckNoError(t, roleRes6)
 
 		assert.NotZero(t, role3.DeleteAt)
 		assert.NotZero(t, role4.DeleteAt)
+		assert.NotZero(t, role6.DeleteAt)
 
 		// Check the channel now uses the default scheme
 		c2, resp := th.SystemAdminClient.GetChannelByName(channel.Name, channel.TeamId, "")
@@ -696,7 +721,7 @@ func TestDeleteScheme(t *testing.T) {
 	})
 
 	t.Run("FailureCases", func(t *testing.T) {
-		th.App.SetLicense(model.NewTestLicense("custom_permissions_schemes"))
+		th.App.Srv().SetLicense(model.NewTestLicense("custom_permissions_schemes"))
 
 		th.App.SetPhase2PermissionsMigrationStatus(true)
 
@@ -723,13 +748,13 @@ func TestDeleteScheme(t *testing.T) {
 		CheckForbiddenStatus(t, r4)
 
 		// Test without license.
-		th.App.SetLicense(nil)
+		th.App.Srv().SetLicense(nil)
 		_, r5 := th.SystemAdminClient.DeleteScheme(s1.Id)
 		CheckNotImplementedStatus(t, r5)
 
 		th.App.SetPhase2PermissionsMigrationStatus(false)
 
-		th.App.SetLicense(model.NewTestLicense("custom_permissions_schemes"))
+		th.App.Srv().SetLicense(model.NewTestLicense("custom_permissions_schemes"))
 
 		_, r6 := th.SystemAdminClient.DeleteScheme(s1.Id)
 		CheckNotImplementedStatus(t, r6)
